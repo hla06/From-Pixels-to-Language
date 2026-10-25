@@ -46,7 +46,7 @@ wandb login
 
 On Windows keep the venv path short (under about 100 characters): pip fails on long paths unless Windows long-path support is enabled.
 
-`wandb login` is only needed for real runs (configs use the W&B tracker). `--smoke` runs and `eda` do not track.
+`wandb login` is needed for real runs and for `tune` (configs use the W&B tracker). `--smoke` runs and `eda` do not track.
 The CUB dataset is downloaded from Hugging Face into the default HF cache on first use.
 
 ## Commands
@@ -79,20 +79,23 @@ pipeline runs; its metrics are meaningless:
 python -m src.cli train --task classification --config configs/scratch_cnn.yaml --smoke
 ```
 
-After tuning, retrain the best setting at the full budget with `configs/resnet18_tuned.yaml` (it has its own
-run name and checkpoint, so `resnet18_finetune` is not overwritten). Copy `lr_backbone` = best lr,
-`lr_head` = 10 x best lr, `weight_decay` and `dropout` from `outputs/tuning/<method>.json` into it first:
-
-```
-python -m src.cli train --task classification --config configs/resnet18_tuned.yaml
-```
-
 Hyperparameter tuning, Grid Search and Random Search on the same ResNet-18 setup, so they can be
 compared (best score, trials, time). Results go to `outputs/tuning/<method>.json`:
 
 ```
 python -m src.cli tune --method grid   --config configs/tune_resnet18.yaml
 python -m src.cli tune --method random --config configs/tune_resnet18.yaml
+```
+
+`tune` logs to W&B too: each trial is a run in the group `tune-<method>`, so `wandb login` is needed for it as
+well. If a trial crashes, the finished trials are saved to `outputs/tuning/<method>.partial.json`.
+
+After tuning, retrain the best setting at the full budget with `configs/resnet18_tuned.yaml` (it has its own
+run name and checkpoint, so `resnet18_finetune` is not overwritten). Copy `lr_backbone` = best lr,
+`lr_head` = 10 x best lr, `weight_decay` and `dropout` from `outputs/tuning/<method>.json` into it first:
+
+```
+python -m src.cli train --task classification --config configs/resnet18_tuned.yaml
 ```
 
 Evaluate a checkpoint on the test set (accuracy, precision, recall, F1, confusion matrix, most
