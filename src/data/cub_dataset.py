@@ -5,7 +5,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset
 
-from src.data.splits import stratified_split
+from src.data.splits import random_split, stratified_split
 from src.data.transforms import build_transforms
 from src.training.seed import seed_worker
 
@@ -56,7 +56,11 @@ def load_cub(cfg: dict):
     if d.get("subset"):  # smoke runs: seeded random subset of train images
         rng = np.random.RandomState(cfg["seed"])
         pool = sorted(rng.choice(len(labels), d["subset"], replace=False).tolist())
-    tr, va = stratified_split([labels[i] for i in pool], d.get("val_fraction", 0.2), cfg["seed"])
+    frac = d.get("val_fraction", 0.2)
+    if d.get("subset"):  # a tiny subset has fewer val images than classes, so stratifying would fail
+        tr, va = random_split(len(pool), frac, cfg["seed"])
+    else:
+        tr, va = stratified_split([labels[i] for i in pool], frac, cfg["seed"])
     tr_idx, va_idx = [pool[i] for i in tr], [pool[i] for i in va]
     train_ds = CubDataset(train_hf, tr_idx, build_transforms(True, size, d.get("aug")))
     val_ds = CubDataset(train_hf, va_idx, build_transforms(False, size))

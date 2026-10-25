@@ -1,0 +1,26 @@
+# efficientnet_b0_finetune
+seed: 42
+checkpoint_dir: outputs/checkpoints
+encoder:
+  name: efficientnet_b0
+  pretrained: true
+  freeze: false
+data:
+  num_classes: 200
+  val_fraction: 0.2
+  image_size: 224
+  num_workers: 2  # set to 0 if DataLoader workers hang on Windows
+train:
+  epochs: 30
+  patience: 7
+  lr_backbone: 1.0e-4
+  lr_head: 1.0e-3
+  weight_decay: 1.0e-4
+  dropout: 0.5
+  batch_size: 64
+  label_smoothing: 0.1
+tracker:
+  name: wandb
+  project: pixels-to-language
+  group: m1-runs
+  run_name: efficientnet_b0_finetune

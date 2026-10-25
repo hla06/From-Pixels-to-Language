@@ -27,3 +27,10 @@ def test_single_image_class_goes_to_train():
     tr, va = stratified_split(labels)
     assert len(labels) - 1 in tr
     assert len(labels) - 1 not in va
+
+
+def test_random_split_is_disjoint_complete_and_seeded():
+    from src.data.splits import random_split
+    tr, va = random_split(10, 0.2, seed=1)
+    assert len(va) == 2 and sorted(tr + va) == list(range(10))
+    assert (tr, va) == random_split(10, 0.2, seed=1)

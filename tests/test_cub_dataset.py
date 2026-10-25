@@ -27,3 +27,12 @@ def test_build_loaders_keys_and_batch(monkeypatch):
     x, y = next(iter(loaders["train"]))
     assert x.shape == (4, 3, 224, 224) and y.shape == (4,)
     assert len(loaders["val"].dataset) == 6
+
+
+def test_subset_uses_plain_split_even_with_more_classes_than_val_images(monkeypatch):
+    import src.data.cub_dataset as m
+    train = [{"image": Image.new("RGB", (8, 8)), "label": i % 50} for i in range(100)]
+    monkeypatch.setattr(m, "_load_hf", lambda: (train, _fake_split(4), [str(i) for i in range(50)]))
+    cfg = {"seed": 0, "data": {"subset": 32, "val_fraction": 0.2}}
+    train_ds, val_ds, _, _ = m.load_cub(cfg)
+    assert len(train_ds) + len(val_ds) == 32 and len(val_ds) == 6
