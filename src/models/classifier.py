@@ -17,8 +17,7 @@ class Classifier(nn.Module):
     def train(self, mode: bool = True):
         super().train(mode)
         if mode and self.encoder.frozen:
-            # A frozen encoder must not update BatchNorm running stats.
-            for m in self.encoder.modules():
-                if isinstance(m, nn.modules.batchnorm._BatchNorm):
-                    m.eval()
+            # A frozen encoder is a fixed feature extractor: eval() freezes BatchNorm stats and
+            # turns off Dropout / StochasticDepth. The head keeps training.
+            self.encoder.eval()
         return self

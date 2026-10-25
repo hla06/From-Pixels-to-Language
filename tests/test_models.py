@@ -38,6 +38,14 @@ def test_frozen_encoder_no_grad_and_bn_eval():
     assert model.head[0].training
 
 
+def test_frozen_efficientnet_encoder_fully_eval():
+    enc = build_encoder("efficientnet_b0", pretrained=False, freeze=True)
+    model = Classifier(enc, num_classes=200)
+    model.train()
+    assert not any(m.training for m in model.encoder.modules())  # BN, Dropout, StochasticDepth
+    assert model.head[0].training
+
+
 def test_unfrozen_bn_trains():
     model = Classifier(build_encoder("resnet18", pretrained=False))
     model.train()
