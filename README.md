@@ -17,7 +17,7 @@ src/
   training/         Trainer, tuner, samplers, experiment tracker (W&B), seeding
   evaluation/       metrics, evaluate/predict helpers, benchmark table
   visualization/    EDA plots, Grad-CAM, comparison figures
-configs/            one YAML per training run (8), tune_resnet18.yaml, benchmark.yaml
+configs/            one YAML per training run (8 + resnet18_tuned), tune_resnet18.yaml, benchmark.yaml
 notebooks/          colab_runner.ipynb (shell cells only; no logic)
 outputs/NOTES.md    cleaning steps, findings, failed experiments, M1 coverage and gaps
 tests/              pytest suite
@@ -77,6 +77,14 @@ pipeline runs; its metrics are meaningless:
 
 ```
 python -m src.cli train --task classification --config configs/scratch_cnn.yaml --smoke
+```
+
+After tuning, retrain the best setting at the full budget with `configs/resnet18_tuned.yaml` (it has its own
+run name and checkpoint, so `resnet18_finetune` is not overwritten). Copy `lr_backbone` = best lr,
+`lr_head` = 10 x best lr, `weight_decay` and `dropout` from `outputs/tuning/<method>.json` into it first:
+
+```
+python -m src.cli train --task classification --config configs/resnet18_tuned.yaml
 ```
 
 Hyperparameter tuning, Grid Search and Random Search on the same ResNet-18 setup, so they can be

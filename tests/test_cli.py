@@ -11,7 +11,7 @@ from src.models.registry import build_encoder
 
 def test_all_configs_resolve_encoder():
     paths = [p for p in glob.glob("configs/*.yaml") if "encoder" in load_config(p)]
-    assert len(paths) == 9
+    assert len(paths) == 10
     for p in paths:
         cfg = load_config(p)
         assert cfg["tracker"]["run_name"] == p.replace("\\", "/").split("/")[-1][:-5]
