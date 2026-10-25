@@ -43,8 +43,19 @@ def test_predict_milestone2_returns_2(capsys):
 def test_predict_milestone2_without_checkpoint_and_missing_checkpoint(capsys):
     assert main(["predict", "--task", "caption", "--image", "p"]) == 2
     assert "Milestone 2" in capsys.readouterr().err
-    assert main(["predict", "--image", "p"]) == 2
-    assert "--checkpoint" in capsys.readouterr().err
+
+
+def test_predict_missing_checkpoint_or_image_returns_2(tiny_ckpt, tmp_path, capsys):
+    assert main(["predict", "--image", "p", "--checkpoint", str(tmp_path / "nope.pt")]) == 2
+    assert "nope.pt" in capsys.readouterr().err
+    assert main(["predict", "--image", str(tmp_path / "missing.png"), "--checkpoint", tiny_ckpt]) == 2
+    assert "missing.png" in capsys.readouterr().err
+
+
+def test_predict_checkpoint_defaults_to_final_model():
+    from src.cli import DEFAULT_CHECKPOINT, build_parser
+    args = build_parser().parse_args(["predict", "--image", "p"])
+    assert args.checkpoint == DEFAULT_CHECKPOINT == "outputs/checkpoints/resnet18_finetune.pt"
 
 
 @pytest.fixture

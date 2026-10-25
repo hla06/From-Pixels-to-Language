@@ -26,6 +26,7 @@ TUNING_DIR = Path("outputs/tuning")
 HISTORY_DIR = Path("outputs/history")
 EVAL_DIR = Path("outputs/eval")
 FIGURES_DIR = Path("outputs/figures")
+DEFAULT_CHECKPOINT = "outputs/checkpoints/resnet18_finetune.pt"  # the final model
 BENCHMARK_CONFIG = Path("configs/benchmark.yaml")
 
 
@@ -117,9 +118,16 @@ def cmd_tune(args) -> int:
 def cmd_predict(args) -> int:
     if _milestone2_guard(args):
         return 2
-    if not args.checkpoint:
-        print("predict requires --checkpoint PATH", file=sys.stderr)
+    try:
+        return _predict(args)
+    except FileNotFoundError as e:  # missing image or checkpoint: a message, not a traceback
+        print(f"error: file not found: {e.filename or e}. Check --image / --checkpoint "
+              f"(default checkpoint: {DEFAULT_CHECKPOINT}, the final model; train it first "
+              f"or pass --checkpoint).", file=sys.stderr)
         return 2
+
+
+def _predict(args) -> int:
     from src.evaluation.evaluate import predict_image
     for name, prob in predict_image(args.image, args.checkpoint, topk=args.topk):
         print(f"{prob:.4f}  {name}")
@@ -284,7 +292,8 @@ def build_parser() -> argparse.ArgumentParser:
         if name in ("train", "predict"):
             p.add_argument("--task", choices=TASKS, default="classification")
         if name in ("predict", "evaluate", "gradcam"):
-            p.add_argument("--checkpoint", required=name != "predict")  # predict checks after the M2 guard
+            p.add_argument("--checkpoint", required=name != "predict",
+                           default=DEFAULT_CHECKPOINT if name == "predict" else None)
         if name == "tune":
             p.set_defaults(config=DEFAULT_TUNE_CONFIG)
             p.add_argument("--method", choices=["grid", "random"], default="grid")

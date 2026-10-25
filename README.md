@@ -108,7 +108,9 @@ Grad-CAM on correct and wrong test predictions (grids written to `--out`, defaul
 python -m src.cli gradcam --checkpoint outputs/checkpoints/resnet18_finetune.pt --out outputs/figures/gradcam_resnet18_finetune
 ```
 
-Predict one image (top-k classes; `--gradcam-out` optionally saves a Grad-CAM overlay):
+Predict one image (top-k classes; `--gradcam-out` optionally saves a Grad-CAM overlay). `--checkpoint`
+defaults to `outputs/checkpoints/resnet18_finetune.pt`, the final model; pass `--checkpoint` to use another
+one (for example `resnet18_tuned.pt`). A missing image or checkpoint prints an error and exits with code 2:
 
 ```
 python -m src.cli predict --task classification --image path/to/bird.jpg --checkpoint outputs/checkpoints/resnet18_finetune.pt --topk 5 --gradcam-out outputs/figures/bird_cam.png
