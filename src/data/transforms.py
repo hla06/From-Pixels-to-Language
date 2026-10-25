@@ -18,6 +18,7 @@ def build_transforms(train: bool, image_size: int = 224, aug: dict | None = None
     jitter = aug.get("jitter", 0.2)
     return T.Compose([
         to_rgb,
+        T.Resize(round(image_size * 256 / 224)),  # resize ~256, then random resized crop 224
         T.RandomResizedCrop(image_size, scale=(aug.get("scale_min", 0.5), 1.0)),
         T.RandomHorizontalFlip(aug.get("hflip", 0.5)),  # no vertical flip: birds are upright
         T.RandomRotation(aug.get("rotation", 15)),

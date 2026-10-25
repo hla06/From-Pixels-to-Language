@@ -25,3 +25,11 @@ def test_train_transform_stochastic():
     t = build_transforms(train=True)
     img = _img("RGB")
     assert not torch.equal(t(img), t(img))
+
+
+def test_train_transform_resizes_before_random_crop():
+    from torchvision import transforms as T
+    ops = build_transforms(train=True, image_size=224).transforms
+    kinds = [type(o) for o in ops]
+    assert kinds.index(T.Resize) < kinds.index(T.RandomResizedCrop)
+    assert ops[kinds.index(T.Resize)].size == 256

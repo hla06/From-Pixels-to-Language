@@ -54,7 +54,8 @@
 ### Known gaps
 - `configs/benchmark.yaml` published numbers need human re-verification against the papers before they go in the report.
 - EDA typo count (1378) includes tokenization artifacts (punctuation attached to words, e.g. `massive,`); no cleaning beyond the listed steps was applied.
-- "Resize ~256" is not explicit in the train transform (check `src/data/transforms.py` against the spec's augmentation wording).
-- A frozen EfficientNet-B0 keeps stochastic depth (and dropout) active unless the encoder is put in eval mode, so frozen features are noisy in train mode.
+- The train transform now resizes explicitly (to round(image_size * 256 / 224), i.e. 256) before RandomResizedCrop, matching the spec's "resize ~256, random resized crop 224".
+- Validation loss includes label smoothing 0.1, so it never approaches 0; compare it across runs, not against 0.
+- On CUDA the GradScaler may skip the first optimizer step (inf/NaN check), which produces a harmless scheduler warning.
 - Run history, eval JSON, tuning and figures are git-ignored; copy the figures into the report.
 - Unconfirmed whether "own CNN" in the spec allows a standard architecture; ScratchCNN is a small custom CNN trained from scratch, and ResNet-18 random init is an additional from-scratch baseline.
