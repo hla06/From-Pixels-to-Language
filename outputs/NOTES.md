@@ -34,3 +34,27 @@
 3. Run `tune --method grid` and `tune --method random`, then retrain the best setting once at the full budget.
 4. `evaluate` every final checkpoint on the test set, Grad-CAM for the best fine-tuned model and ScratchCNN, `figures`, copy checkpoints/outputs to Drive.
 5. Add anything that failed or underperformed (what was tried, what happened, suspected reason) under "Failed experiments"; commit `docs: experiment notes and final configs`.
+
+## M1 coverage and gaps
+
+(Hand-written; not part of the auto-generated EDA block.) Checked against spec section 9.
+
+### Exists in code
+- 1.1: class distribution, image sizes/quality, caption statistics, anomalies and plots (`eda`); `description` split/cleaned; train/val/test split (val carved from train); augmentation transforms.
+- 1.2: ScratchCNN baseline; transfer learning with pretrained ResNet-18/50 and EfficientNet-B0 (frozen and fine-tuned) plus ResNet-18 random init; Grid and Random tuning with a comparison plot; W&B tracking; Grad-CAM on correct and wrong predictions.
+- Cross-cutting: modular `src/` + CLI (`eda, train, tune, evaluate, gradcam, predict, figures`), seeds, README + pinned requirements, comparison figures, metrics (accuracy, precision, recall, F1, confusion matrix), benchmark table code and `configs/benchmark.yaml`, this failure log.
+
+### Waiting on GPU runs (Colab/Kaggle T4, see `notebooks/colab_runner.ipynb`)
+- Set final `epochs`/`patience` after timing one epoch (configs hold placeholders).
+- The 8 training runs, the Grid and Random tuning runs, and the retrain of the best setting.
+- `evaluate` on every final checkpoint, Grad-CAM figures, `figures`.
+- The benchmark table needs our accuracies; the training curves, model comparison and tuning comparison figures need the run results.
+- "Failed experiments" above is empty until runs happen.
+
+### Known gaps
+- `configs/benchmark.yaml` published numbers need human re-verification against the papers before they go in the report.
+- EDA typo count (1378) includes tokenization artifacts (punctuation attached to words, e.g. `massive,`); no cleaning beyond the listed steps was applied.
+- "Resize ~256" is not explicit in the train transform (check `src/data/transforms.py` against the spec's augmentation wording).
+- A frozen EfficientNet-B0 keeps stochastic depth (and dropout) active unless the encoder is put in eval mode, so frozen features are noisy in train mode.
+- Run history, eval JSON, tuning and figures are git-ignored; copy the figures into the report.
+- Unconfirmed whether "own CNN" in the spec allows a standard architecture; ScratchCNN is a small custom CNN trained from scratch, and ResNet-18 random init is an additional from-scratch baseline.
