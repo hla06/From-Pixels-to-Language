@@ -11,7 +11,7 @@ from src.models.registry import build_encoder
 
 def test_all_configs_resolve_encoder():
     paths = [p for p in glob.glob("configs/*.yaml") if "encoder" in load_config(p)]
-    assert len(paths) == 8
+    assert len(paths) == 9
     for p in paths:
         cfg = load_config(p)
         assert cfg["tracker"]["run_name"] == p.replace("\\", "/").split("/")[-1][:-5]
@@ -30,7 +30,7 @@ def test_unknown_task_exits_nonzero(capsys):
     assert "bogus" in capsys.readouterr().err
 
 
-@pytest.mark.parametrize("cmd", ["tune", "evaluate", "gradcam"])
+@pytest.mark.parametrize("cmd", ["evaluate", "gradcam"])
 def test_stub_subcommands_return_2(cmd, capsys):
     assert main([cmd, "--config", "x"]) == 2
     assert "not implemented yet" in capsys.readouterr().out

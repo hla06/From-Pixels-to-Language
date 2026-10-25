@@ -3,7 +3,10 @@
 One handler per subcommand, looked up in HANDLERS, so a later task only replaces one function.
 """
 import argparse
+import dataclasses
+import json
 import sys
+from pathlib import Path
 
 import torch
 
@@ -18,6 +21,8 @@ from src.training.trainer import Trainer, build_optimizer, build_scheduler
 TASKS = ["classification", "colorization", "caption"]
 DEFAULT_EDA_CONFIG = "configs/scratch_cnn.yaml"  # eda only needs seed and data settings
 SMOKE_SUBSET, SMOKE_BATCH = 32, 8
+DEFAULT_TUNE_CONFIG = "configs/tune_resnet18.yaml"
+TUNING_DIR = Path("outputs/tuning")
 
 
 def run_train(cfg: dict, loaders: dict | None = None) -> dict:
@@ -78,6 +83,26 @@ def cmd_train(args) -> int:
     return 0
 
 
+def cmd_tune(args) -> int:
+    from src.training.samplers import GridSampler, RandomSampler
+    from src.training.tuner import Tuner
+    cfg = load_config(args.config)
+    tuning = cfg.pop("tuning")  # search spaces are not part of a training run's config
+    if args.method == "grid":
+        sampler = GridSampler(tuning["grid"])
+    else:
+        sampler = RandomSampler(tuning["random"], tuning["n_trials"], cfg["seed"])
+    tuner = Tuner(cfg, sampler, args.method, lambda c: run_train(c)["best_val_acc"],
+                  epochs_per_trial=tuning["epochs_per_trial"])
+    result = tuner.run()
+    TUNING_DIR.mkdir(parents=True, exist_ok=True)
+    path = TUNING_DIR / f"{args.method}.json"
+    path.write_text(json.dumps(dataclasses.asdict(result), indent=2), encoding="utf-8")
+    print(f"{args.method}: best_score={result.best_score:.4f} params={result.best_params} "
+          f"trials={result.n_trials} seconds={result.seconds:.0f} -> {path}")
+    return 0
+
+
 def _not_implemented(args) -> int:
     print("not implemented yet (Task 9/10)")
     return 2
@@ -92,7 +117,7 @@ def cmd_predict(args) -> int:
 HANDLERS = {
     "eda": cmd_eda,
     "train": cmd_train,
-    "tune": _not_implemented,
+    "tune": cmd_tune,
     "predict": cmd_predict,
     "evaluate": _not_implemented,
     "gradcam": _not_implemented,
@@ -107,6 +132,9 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--config", default=DEFAULT_EDA_CONFIG if name == "eda" else None)
         if name in ("train", "predict", "evaluate", "gradcam"):
             p.add_argument("--task", choices=TASKS, default="classification")
+        if name == "tune":
+            p.set_defaults(config=DEFAULT_TUNE_CONFIG)
+            p.add_argument("--method", choices=["grid", "random"], default="grid")
         if name == "train":
             p.add_argument("--smoke", action="store_true")
         if name in ("predict", "gradcam"):
