@@ -121,7 +121,7 @@ def cmd_predict(args) -> int:
     try:
         return _predict(args)
     except FileNotFoundError as e:  # missing image or checkpoint: a message, not a traceback
-        print(f"error: file not found: {e.filename or e}. Check --image / --checkpoint "
+        print(f"error: {e.filename or e}. Check --image / --checkpoint "
               f"(default checkpoint: {DEFAULT_CHECKPOINT}, the final model; train it first "
               f"or pass --checkpoint).", file=sys.stderr)
         return 2

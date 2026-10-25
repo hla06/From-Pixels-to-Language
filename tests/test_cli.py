@@ -46,7 +46,10 @@ def test_predict_milestone2_without_checkpoint_and_missing_checkpoint(capsys):
 
 
 def test_predict_missing_checkpoint_or_image_returns_2(tiny_ckpt, tmp_path, capsys):
-    assert main(["predict", "--image", "p", "--checkpoint", str(tmp_path / "nope.pt")]) == 2
+    from PIL import Image
+    img = tmp_path / "i.png"
+    Image.new("RGB", (8, 8)).save(img)
+    assert main(["predict", "--image", str(img), "--checkpoint", str(tmp_path / "nope.pt")]) == 2
     assert "nope.pt" in capsys.readouterr().err
     assert main(["predict", "--image", str(tmp_path / "missing.png"), "--checkpoint", tiny_ckpt]) == 2
     assert "missing.png" in capsys.readouterr().err
