@@ -26,6 +26,7 @@ TUNING_DIR = Path("outputs/tuning")
 HISTORY_DIR = Path("outputs/history")
 EVAL_DIR = Path("outputs/eval")
 FIGURES_DIR = Path("outputs/figures")
+BENCHMARK_CONFIG = Path("configs/benchmark.yaml")
 
 
 def run_train(cfg: dict, loaders: dict | None = None) -> dict:
@@ -170,7 +171,7 @@ def cmd_evaluate(args) -> int:
         print(f"  {p['true']} -> {p['pred']}: {p['count']}")
     EVAL_DIR.mkdir(parents=True, exist_ok=True)
     out = EVAL_DIR / f"{name}.json"
-    out.write_text(json.dumps({"name": name, "metrics": metrics,
+    out.write_text(json.dumps({"name": name, "metrics": metrics, "class_names": list(names),
                                "y_true": res["y_true"].tolist(), "y_pred": res["y_pred"].tolist(),
                                "most_confused_pairs": named}, indent=2), encoding="utf-8")
     print(f"-> {out}")
@@ -203,6 +204,64 @@ def cmd_gradcam(args) -> int:
     return 0
 
 
+def _load_jsons(directory: Path) -> dict:
+    return {p.stem: json.loads(p.read_text(encoding="utf-8"))
+            for p in sorted(Path(directory).glob("*.json"))}
+
+
+def cmd_figures(args) -> int:
+    """Build every comparison figure from whatever result files exist; skip the rest."""
+    import yaml
+    from src.evaluation.benchmark import benchmark_table
+    from src.evaluation.metrics import confusion
+    from src.training.tuner import TuneResult
+    from src.visualization import comparison as cmp
+    out = Path(FIGURES_DIR)
+    out.mkdir(parents=True, exist_ok=True)
+    histories, evals, tuning = (_load_jsons(d) for d in (HISTORY_DIR, EVAL_DIR, TUNING_DIR))
+
+    def skip(what):
+        print(f"skip {what}: no input files")
+
+    if evals:
+        cmp.plot_model_comparison({n: e["metrics"] for n, e in evals.items()},
+                                  out / "model_comparison.png")
+    else:
+        skip("model_comparison")
+    if histories:
+        cmp.plot_training_curves(histories, out / "training_curves.png")
+    else:
+        skip("training_curves")
+    if tuning:
+        cmp.plot_tuning_comparison({m: TuneResult(**r) for m, r in tuning.items()},
+                                   out / "tuning_comparison.png")
+    else:
+        skip("tuning_comparison")
+    for name, e in evals.items():
+        names = e.get("class_names")
+        if not names:
+            print(f"skip confused_pairs/per_class_f1 for {name}: eval json has no class_names")
+            continue
+        cm = confusion(e["y_true"], e["y_pred"], len(names))
+        cmp.plot_confused_pairs(cm, names, out / f"confused_pairs_{name}.png")
+        cmp.plot_per_class_f1(e["y_true"], e["y_pred"], names, out / f"per_class_f1_{name}.png")
+    published = []
+    if Path(BENCHMARK_CONFIG).exists():
+        cfg = yaml.safe_load(Path(BENCHMARK_CONFIG).read_text(encoding="utf-8")) or {}
+        published = cfg.get("published") or []
+    ours = {n: 100 * e["metrics"]["accuracy"] for n, e in evals.items()}  # percent, like published
+    if ours or published:
+        df = benchmark_table(ours, published)
+        df.to_csv(out / "benchmark.csv", index=False)
+        lines = ["| " + " | ".join(df.columns) + " |", "|" + "---|" * len(df.columns)]
+        lines += ["| " + " | ".join(str(v) for v in row) + " |" for row in df.itertuples(index=False)]
+        (out / "benchmark.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    else:
+        skip("benchmark")
+    print(f"figures -> {out}")
+    return 0
+
+
 HANDLERS = {
     "eda": cmd_eda,
     "train": cmd_train,
@@ -210,6 +269,7 @@ HANDLERS = {
     "predict": cmd_predict,
     "evaluate": cmd_evaluate,
     "gradcam": cmd_gradcam,
+    "figures": cmd_figures,
 }
 
 

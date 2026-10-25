@@ -1,0 +1,19 @@
+# Published CUB-200-2011 top-1 accuracy (percent), each read on the cited page.
+# Setups differ from ours (448px inputs, some with ImageNet-21k) -- explain the gap in the report.
+published:
+  - name: ResNet-50 baseline (NTS-Net paper, Table 4)
+    accuracy: 84.5
+    source_url: https://arxiv.org/abs/1809.00287
+    setup: "ResNet-50, ImageNet (ILSVRC2012) pretrained, 448x448 input, official split 5994 train / 5794 test"
+  - name: NTS-Net (K=4)
+    accuracy: 87.5
+    source_url: https://arxiv.org/abs/1809.00287
+    setup: "ResNet-50 backbone + navigator/teacher/scrutinizer, ILSVRC2012 pretrained, 448x448 input, 5994/5794 split"
+  - name: ViT-B/16 baseline (TransFG paper, Table 1)
+    accuracy: 90.3
+    source_url: https://arxiv.org/abs/2103.07976
+    setup: "ViT-B/16, ImageNet-21k pretrained, 448x448 input; split counts not stated on the page read (standard CUB)"
+  - name: TransFG
+    accuracy: 91.7
+    source_url: https://arxiv.org/abs/2103.07976
+    setup: "ViT-B/16 + part selection module, ImageNet-21k pretrained, 448x448 input; split counts not stated on the page read (standard CUB)"

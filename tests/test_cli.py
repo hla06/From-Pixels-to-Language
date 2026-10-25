@@ -67,7 +67,7 @@ def test_evaluate_and_gradcam_commands(tiny_ckpt, tmp_path, monkeypatch, capsys)
     monkeypatch.setattr(cli, "EVAL_DIR", tmp_path / "eval")
     assert main(["evaluate", "--checkpoint", tiny_ckpt]) == 0
     out = json.loads((tmp_path / "eval" / "tiny.json").read_text())
-    assert {"metrics", "y_true", "y_pred", "most_confused_pairs", "name"} <= set(out)
+    assert {"metrics", "y_true", "y_pred", "most_confused_pairs", "name", "class_names"} <= set(out)
     assert len(out["y_true"]) == 12 and "top5_accuracy" in out["metrics"]
     assert main(["gradcam", "--checkpoint", tiny_ckpt, "--out", str(tmp_path / "fig")]) == 0
     assert list((tmp_path / "fig").glob("gradcam_tiny_*.png"))
