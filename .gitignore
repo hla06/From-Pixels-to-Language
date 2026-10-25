@@ -8,3 +8,8 @@ outputs/checkpoints/
 *.pth
 .ipynb_checkpoints/
 .superpowers/
+outputs/smoke/
+outputs/history/
+outputs/eval/
+outputs/tuning/
+outputs/figures/
