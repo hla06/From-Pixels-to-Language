@@ -3,7 +3,7 @@ __pycache__/
 wandb/
 .env
 outputs/checkpoints/
-data/
+/data/
 *.pt
 *.pth
 .ipynb_checkpoints/
