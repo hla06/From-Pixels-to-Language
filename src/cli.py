@@ -23,6 +23,9 @@ DEFAULT_EDA_CONFIG = "configs/scratch_cnn.yaml"  # eda only needs seed and data 
 SMOKE_SUBSET, SMOKE_BATCH = 32, 8
 DEFAULT_TUNE_CONFIG = "configs/tune_resnet18.yaml"
 TUNING_DIR = Path("outputs/tuning")
+HISTORY_DIR = Path("outputs/history")
+EVAL_DIR = Path("outputs/eval")
+FIGURES_DIR = Path("outputs/figures")
 
 
 def run_train(cfg: dict, loaders: dict | None = None) -> dict:
@@ -45,7 +48,12 @@ def run_train(cfg: dict, loaders: dict | None = None) -> dict:
         device = "cpu"
     trainer = Trainer(model, loaders, optimizer, scheduler, tracker, device, cfg,
                       class_names=class_names)
-    return trainer.fit()
+    result = trainer.fit()
+    run_name = cfg.get("tracker", {}).get("run_name") or "run"
+    HISTORY_DIR.mkdir(parents=True, exist_ok=True)
+    (HISTORY_DIR / f"{run_name}.json").write_text(json.dumps(result["history"], indent=2),
+                                                  encoding="utf-8")
+    return result
 
 
 def apply_smoke(cfg: dict) -> dict:
@@ -103,15 +111,94 @@ def cmd_tune(args) -> int:
     return 0
 
 
-def _not_implemented(args) -> int:
-    print("not implemented yet (Task 9/10)")
-    return 2
-
-
 def cmd_predict(args) -> int:
     if _milestone2_guard(args):
         return 2
-    return _not_implemented(args)
+    from src.evaluation.evaluate import predict_image
+    for name, prob in predict_image(args.image, args.checkpoint, topk=args.topk):
+        print(f"{prob:.4f}  {name}")
+    if args.gradcam_out:
+        from PIL import Image
+        from src.data.transforms import build_transforms
+        from src.training.trainer import load_checkpoint
+        from src.visualization.gradcam import GradCAM, denormalize, overlay
+        ckpt = torch.load(args.checkpoint, map_location="cpu")
+        size = ckpt["config"].get("data", {}).get("image_size", 224)
+        model = load_checkpoint(args.checkpoint)
+        with Image.open(args.image) as im:
+            x = build_transforms(False, size)(im.convert("RGB")).unsqueeze(0)
+        cam = GradCAM(model, model.encoder.gradcam_layer())
+        try:
+            heat = cam(x)
+        finally:
+            cam.close()
+        Path(args.gradcam_out).parent.mkdir(parents=True, exist_ok=True)
+        overlay(denormalize(x[0]), heat).save(args.gradcam_out)
+        print(f"Grad-CAM overlay -> {args.gradcam_out}")
+    return 0
+
+
+def _test_run(args):
+    """Run a checkpoint over the test split. Returns (model, test_ds, class_names, result)."""
+    from src.evaluation.evaluate import evaluate
+    from src.training.trainer import load_checkpoint
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    ckpt = torch.load(args.checkpoint, map_location="cpu")
+    cfg = load_config(args.config) if args.config else ckpt["config"]  # config only for data settings
+    batch_size = cfg["data"].get("batch_size", cfg["train"]["batch_size"])
+    _, _, test_ds, _ = load_cub(cfg)
+    model = load_checkpoint(args.checkpoint, device=device)
+    loader = torch.utils.data.DataLoader(test_ds, batch_size=batch_size,
+                                         num_workers=cfg["data"].get("num_workers", 0))
+    return model, test_ds, ckpt["class_names"], evaluate(model, loader, device)
+
+
+def cmd_evaluate(args) -> int:
+    from src.evaluation.metrics import compute_metrics, confusion, most_confused_pairs
+    _, _, names, res = _test_run(args)
+    metrics = compute_metrics(res["y_true"], res["y_pred"], res["logits"], len(names))
+    pairs = most_confused_pairs(confusion(res["y_true"], res["y_pred"], len(names)))
+    named = [{"true": names[t], "pred": names[p], "count": c} for t, p, c in pairs]
+    name = args.name or Path(args.checkpoint).stem
+    for key, val in metrics.items():
+        print(f"{key}: {val:.4f}")
+    print("most confused pairs (true -> predicted, count):")
+    for p in named:
+        print(f"  {p['true']} -> {p['pred']}: {p['count']}")
+    EVAL_DIR.mkdir(parents=True, exist_ok=True)
+    out = EVAL_DIR / f"{name}.json"
+    out.write_text(json.dumps({"name": name, "metrics": metrics,
+                               "y_true": res["y_true"].tolist(), "y_pred": res["y_pred"].tolist(),
+                               "most_confused_pairs": named}, indent=2), encoding="utf-8")
+    print(f"-> {out}")
+    return 0
+
+
+def cmd_gradcam(args) -> int:
+    from scipy.special import softmax
+    from src.evaluation.evaluate import select_gradcam_examples
+    from src.visualization.gradcam import GradCAM, denormalize, save_example_grid
+    model, test_ds, names, res = _test_run(args)
+    probs = softmax(res["logits"], axis=1)
+    picks = select_gradcam_examples(res["y_true"], res["y_pred"], probs)
+    stem = Path(args.checkpoint).stem
+    device = next(model.parameters()).device
+    cam = GradCAM(model, model.encoder.gradcam_layer())
+    try:
+        for category, idxs in picks.items():
+            items = []
+            for i in idxs:
+                x, _ = test_ds[i]
+                pred = int(res["y_pred"][i])
+                items.append({"image": denormalize(x), "cam": cam(x.unsqueeze(0).to(device)),
+                              "true": names[res["y_true"][i]], "pred": names[pred],
+                              "conf": float(probs[i, pred])})
+            path = Path(args.out) / f"gradcam_{stem}_{category}.png"
+            save_example_grid(items, f"{stem}: {category}", str(path))
+            print(f"{category}: {len(items)} examples -> {path}")
+    finally:
+        cam.close()
+    return 0
 
 
 HANDLERS = {
@@ -119,8 +206,8 @@ HANDLERS = {
     "train": cmd_train,
     "tune": cmd_tune,
     "predict": cmd_predict,
-    "evaluate": _not_implemented,
-    "gradcam": _not_implemented,
+    "evaluate": cmd_evaluate,
+    "gradcam": cmd_gradcam,
 }
 
 
@@ -130,15 +217,23 @@ def build_parser() -> argparse.ArgumentParser:
     for name in HANDLERS:
         p = sub.add_parser(name)
         p.add_argument("--config", default=DEFAULT_EDA_CONFIG if name == "eda" else None)
-        if name in ("train", "predict", "evaluate", "gradcam"):
+        if name in ("train", "predict"):
             p.add_argument("--task", choices=TASKS, default="classification")
+        if name in ("predict", "evaluate", "gradcam"):
+            p.add_argument("--checkpoint", required=True)
         if name == "tune":
             p.set_defaults(config=DEFAULT_TUNE_CONFIG)
             p.add_argument("--method", choices=["grid", "random"], default="grid")
         if name == "train":
             p.add_argument("--smoke", action="store_true")
-        if name in ("predict", "gradcam"):
-            p.add_argument("--image")
+        if name == "predict":
+            p.add_argument("--image", required=True)
+            p.add_argument("--topk", type=int, default=5)
+            p.add_argument("--gradcam-out")
+        if name == "evaluate":
+            p.add_argument("--name")
+        if name == "gradcam":
+            p.add_argument("--out", default=str(FIGURES_DIR))
     return parser
 
 
