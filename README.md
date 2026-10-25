@@ -44,6 +44,8 @@ pip install -r requirements.txt
 wandb login
 ```
 
+On Windows keep the venv path short (under about 100 characters): pip fails on long paths unless Windows long-path support is enabled.
+
 `wandb login` is only needed for real runs (configs use the W&B tracker). `--smoke` runs and `eda` do not track.
 The CUB dataset is downloaded from Hugging Face into the default HF cache on first use.
 
