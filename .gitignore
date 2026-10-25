@@ -13,3 +13,5 @@ outputs/history/
 outputs/eval/
 outputs/tuning/
 outputs/figures/
+outputs/data/
+outputs/eda/
