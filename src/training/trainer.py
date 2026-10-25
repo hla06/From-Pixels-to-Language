@@ -84,7 +84,9 @@ class Trainer:
                 bad_epochs += 1
                 if bad_epochs >= t["patience"]:
                     break
-        self.tracker.log_artifact(self.checkpoint_path, "best-model")
+        run_name = self.cfg.get("tracker", {}).get("run_name") or "best-model"
+        # unique per run so W&B artifacts of different runs do not collapse into one lineage
+        self.tracker.log_artifact(self.checkpoint_path, f"{run_name}-best")
         self.tracker.finish()
         return {"best_val_acc": self.best_val_acc, "history": history,
                 "checkpoint": self.checkpoint_path}

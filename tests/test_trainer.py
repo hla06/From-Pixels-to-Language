@@ -120,3 +120,11 @@ def test_scheduler_warmup_then_cosine(tmp_path):
     assert lrs[0] < lrs[2]          # warming up
     assert lrs[2] == pytest.approx(1e-2)  # peak at end of warmup
     assert lrs[-1] < lrs[3]         # decaying
+
+
+def test_artifact_named_after_run(tmp_path):
+    cfg = make_cfg(tmp_path)
+    cfg["tracker"] = {"name": "null", "run_name": "my_run"}
+    t, tracker = make_trainer(cfg)
+    t.fit()
+    assert [c[2] for c in tracker.calls if c[0] == "log_artifact"] == ["my_run-best"]
