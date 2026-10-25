@@ -91,3 +91,10 @@ def test_tune_cli_writes_json(tmp_path, monkeypatch):
     data = json.loads((tmp_path / "random.json").read_text())
     assert data["method"] == "random" and data["n_trials"] == 12
     assert len(data["scores"]) == 12
+
+
+def test_trial_cfg_redirects_history():
+    seen = []
+    Tuner(_base_cfg(), GridSampler({"lr": [1e-4], "weight_decay": [1e-4], "dropout": [0.2]}),
+          "grid", lambda c: seen.append(c) or 0.5).run()
+    assert seen[0]["history_dir"] == "outputs/tuning/history"

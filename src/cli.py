@@ -51,8 +51,9 @@ def run_train(cfg: dict, loaders: dict | None = None) -> dict:
                       class_names=class_names)
     result = trainer.fit()
     run_name = cfg.get("tracker", {}).get("run_name") or "run"
-    HISTORY_DIR.mkdir(parents=True, exist_ok=True)
-    (HISTORY_DIR / f"{run_name}.json").write_text(json.dumps(result["history"], indent=2),
+    history_dir = Path(cfg.get("history_dir", str(HISTORY_DIR)))
+    history_dir.mkdir(parents=True, exist_ok=True)
+    (history_dir / f"{run_name}.json").write_text(json.dumps(result["history"], indent=2),
                                                   encoding="utf-8")
     return result
 
@@ -64,6 +65,7 @@ def apply_smoke(cfg: dict) -> dict:
     cfg["train"].update(epochs=1, patience=1, batch_size=SMOKE_BATCH)
     cfg["tracker"] = {"name": "null", "run_name": "smoke"}
     cfg["checkpoint_dir"] = "outputs/smoke"
+    cfg["history_dir"] = "outputs/smoke"  # smoke runs must not show up in the training curves
     return cfg
 
 

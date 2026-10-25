@@ -36,6 +36,7 @@ class Tuner:
         t["epochs"] = self.epochs_per_trial
         cfg["tracker"]["run_name"] = f"{self.method}-trial-{i}"
         cfg["tracker"]["group"] = f"tune-{self.method}"
+        cfg["history_dir"] = "outputs/tuning/history"  # keep trials out of the final curves
         return cfg
 
     def run(self) -> TuneResult:

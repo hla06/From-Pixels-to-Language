@@ -101,3 +101,26 @@ def test_run_train_with_injected_loaders(tmp_path, monkeypatch):
     import json
     hist = json.loads((tmp_path / "outputs" / "history" / "hist_run.json").read_text())
     assert hist and hist[0]["epoch"] == 1 and "val_acc" in hist[0]
+
+
+def test_run_train_writes_history_where_cfg_says(tmp_path, monkeypatch):
+    import json
+    monkeypatch.chdir(tmp_path)
+    ds = TensorDataset(torch.randn(8, 3, 32, 32), torch.arange(8) % 3)
+    loaders = {k: DataLoader(ds, batch_size=4) for k in ("train", "val", "test")}
+    cfg = {"seed": 0, "checkpoint_dir": str(tmp_path), "history_dir": str(tmp_path / "elsewhere"),
+           "encoder": {"name": "scratch_cnn", "pretrained": False, "freeze": False},
+           "data": {"num_classes": 3},
+           "train": {"epochs": 1, "patience": 1, "lr_backbone": 1e-3, "lr_head": 1e-3,
+                     "weight_decay": 1e-4, "dropout": 0.1, "batch_size": 4,
+                     "label_smoothing": 0.1},
+           "tracker": {"name": "null", "run_name": "r"}}
+    run_train(cfg, loaders=loaders)
+    assert json.loads((tmp_path / "elsewhere" / "r.json").read_text())
+    assert not (tmp_path / "outputs" / "history").exists()
+
+
+def test_apply_smoke_sets_history_dir():
+    from src.cli import apply_smoke
+    cfg = apply_smoke({"data": {}, "train": {}})
+    assert cfg["history_dir"] == "outputs/smoke"
