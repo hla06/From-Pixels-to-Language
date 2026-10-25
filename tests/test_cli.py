@@ -30,7 +30,7 @@ def test_unknown_task_exits_nonzero(capsys):
     assert "bogus" in capsys.readouterr().err
 
 
-@pytest.mark.parametrize("cmd", ["evaluate", "gradcam", "predict"])
+@pytest.mark.parametrize("cmd", ["evaluate", "gradcam"])
 def test_checkpoint_flag_is_required(cmd, capsys):
     assert main([cmd]) != 0
 
@@ -38,6 +38,13 @@ def test_checkpoint_flag_is_required(cmd, capsys):
 def test_predict_milestone2_returns_2(capsys):
     assert main(["predict", "--task", "caption", "--image", "x", "--checkpoint", "y"]) == 2
     assert "Milestone 2" in capsys.readouterr().err
+
+
+def test_predict_milestone2_without_checkpoint_and_missing_checkpoint(capsys):
+    assert main(["predict", "--task", "caption", "--image", "p"]) == 2
+    assert "Milestone 2" in capsys.readouterr().err
+    assert main(["predict", "--image", "p"]) == 2
+    assert "--checkpoint" in capsys.readouterr().err
 
 
 @pytest.fixture

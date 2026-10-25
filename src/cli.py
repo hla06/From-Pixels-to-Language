@@ -114,6 +114,9 @@ def cmd_tune(args) -> int:
 def cmd_predict(args) -> int:
     if _milestone2_guard(args):
         return 2
+    if not args.checkpoint:
+        print("predict requires --checkpoint PATH", file=sys.stderr)
+        return 2
     from src.evaluation.evaluate import predict_image
     for name, prob in predict_image(args.image, args.checkpoint, topk=args.topk):
         print(f"{prob:.4f}  {name}")
@@ -175,11 +178,10 @@ def cmd_evaluate(args) -> int:
 
 
 def cmd_gradcam(args) -> int:
-    from scipy.special import softmax
     from src.evaluation.evaluate import select_gradcam_examples
     from src.visualization.gradcam import GradCAM, denormalize, save_example_grid
     model, test_ds, names, res = _test_run(args)
-    probs = softmax(res["logits"], axis=1)
+    probs = torch.softmax(torch.from_numpy(res["logits"]), dim=1).numpy()
     picks = select_gradcam_examples(res["y_true"], res["y_pred"], probs)
     stem = Path(args.checkpoint).stem
     device = next(model.parameters()).device
@@ -220,7 +222,7 @@ def build_parser() -> argparse.ArgumentParser:
         if name in ("train", "predict"):
             p.add_argument("--task", choices=TASKS, default="classification")
         if name in ("predict", "evaluate", "gradcam"):
-            p.add_argument("--checkpoint", required=True)
+            p.add_argument("--checkpoint", required=name != "predict")  # predict checks after the M2 guard
         if name == "tune":
             p.set_defaults(config=DEFAULT_TUNE_CONFIG)
             p.add_argument("--method", choices=["grid", "random"], default="grid")
