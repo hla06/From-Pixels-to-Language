@@ -27,6 +27,7 @@ class NullTracker(Tracker):
 
     def __init__(self):
         self.calls: list[tuple] = []
+        self._finished = False
 
     def log_params(self, params):
         self.calls.append(("log_params", params))
@@ -38,7 +39,9 @@ class NullTracker(Tracker):
         self.calls.append(("log_artifact", path, name))
 
     def finish(self):
-        self.calls.append(("finish",))
+        if not self._finished:  # idempotent: run_train also finishes in a finally block
+            self._finished = True
+            self.calls.append(("finish",))
 
 
 class WandbTracker(Tracker):
@@ -47,6 +50,7 @@ class WandbTracker(Tracker):
 
         self._wandb = wandb
         self._run = wandb.init(project=project, name=run_name, group=group, config=config)
+        self._finished = False
 
     def log_params(self, params):
         self._run.config.update(params, allow_val_change=True)
@@ -64,7 +68,9 @@ class WandbTracker(Tracker):
         self._run.log_artifact(artifact)
 
     def finish(self):
-        self._run.finish()
+        if not self._finished:  # idempotent: run_train also finishes in a finally block
+            self._finished = True
+            self._run.finish()
 
 
 def build_tracker(cfg: dict) -> Tracker:

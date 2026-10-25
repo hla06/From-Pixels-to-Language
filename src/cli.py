@@ -50,7 +50,10 @@ def run_train(cfg: dict, loaders: dict | None = None) -> dict:
         device = "cpu"
     trainer = Trainer(model, loaders, optimizer, scheduler, tracker, device, cfg,
                       class_names=class_names)
-    result = trainer.fit()
+    try:
+        result = trainer.fit()
+    finally:
+        tracker.finish()  # no-op if fit() already finished; closes the W&B run after a crash
     run_name = cfg.get("tracker", {}).get("run_name") or "run"
     history_dir = Path(cfg.get("history_dir", str(HISTORY_DIR)))
     history_dir.mkdir(parents=True, exist_ok=True)
@@ -104,10 +107,25 @@ def cmd_tune(args) -> int:
         sampler = GridSampler(tuning["grid"])
     else:
         sampler = RandomSampler(tuning["random"], tuning["n_trials"], cfg["seed"])
+    done_trials, done_scores = [], []
+
+    def remember(params, score):
+        done_trials.append(params)
+        done_scores.append(score)
+
     tuner = Tuner(cfg, sampler, args.method, lambda c: run_train(c)["best_val_acc"],
-                  epochs_per_trial=tuning["epochs_per_trial"])
-    result = tuner.run()
+                  epochs_per_trial=tuning["epochs_per_trial"], on_trial=remember)
     TUNING_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        result = tuner.run()
+    except Exception:
+        # keep the finished trials: a crash on trial N must not lose trials 1..N-1
+        partial = TUNING_DIR / f"{args.method}.partial.json"
+        partial.write_text(json.dumps({"method": args.method, "scores": done_scores,
+                                       "trials": done_trials}, indent=2), encoding="utf-8")
+        print(f"tuning failed; {len(done_scores)} finished trials saved to {partial}",
+              file=sys.stderr)
+        raise
     path = TUNING_DIR / f"{args.method}.json"
     path.write_text(json.dumps(dataclasses.asdict(result), indent=2), encoding="utf-8")
     print(f"{args.method}: best_score={result.best_score:.4f} params={result.best_params} "
@@ -216,7 +234,8 @@ def cmd_gradcam(args) -> int:
 
 def _load_jsons(directory: Path) -> dict:
     return {p.stem: json.loads(p.read_text(encoding="utf-8"))
-            for p in sorted(Path(directory).glob("*.json"))}
+            for p in sorted(Path(directory).glob("*.json"))
+            if not p.stem.endswith(".partial")}  # partial tuning dumps are not full results
 
 
 def cmd_figures(args) -> int:

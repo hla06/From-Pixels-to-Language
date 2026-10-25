@@ -98,3 +98,36 @@ def test_trial_cfg_redirects_history():
     Tuner(_base_cfg(), GridSampler({"lr": [1e-4], "weight_decay": [1e-4], "dropout": [0.2]}),
           "grid", lambda c: seen.append(c) or 0.5).run()
     assert seen[0]["history_dir"] == "outputs/tuning/history"
+
+
+def test_tuner_on_trial_reports_each_score():
+    got = []
+    Tuner(_base_cfg(), GridSampler(GRID), "grid", lambda c: 0.5,
+          on_trial=lambda params, score: got.append((params, score))).run()
+    assert len(got) == 12 and got[0][1] == 0.5
+
+
+def test_tune_cli_writes_partial_on_failure(tmp_path, monkeypatch):
+    import src.cli as cli
+    calls = []
+
+    def flaky(cfg):
+        calls.append(1)
+        if len(calls) == 3:
+            raise RuntimeError("boom")
+        return 0.1 * len(calls)
+
+    monkeypatch.setattr(cli, "run_train", lambda cfg: {"best_val_acc": flaky(cfg)})
+    monkeypatch.setattr(cli, "TUNING_DIR", tmp_path)
+    with pytest.raises(RuntimeError, match="boom"):
+        main(["tune", "--method", "grid"])
+    data = json.loads((tmp_path / "grid.partial.json").read_text())
+    assert data["scores"] == pytest.approx([0.1, 0.2]) and len(data["trials"]) == 2
+    assert not (tmp_path / "grid.json").exists()
+
+
+def test_figures_ignore_partial_tuning_files(tmp_path):
+    from src.cli import _load_jsons
+    (tmp_path / "grid.json").write_text("{}")
+    (tmp_path / "grid.partial.json").write_text("{}")
+    assert list(_load_jsons(tmp_path)) == ["grid"]

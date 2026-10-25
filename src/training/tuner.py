@@ -22,9 +22,11 @@ class Tuner:
     """train_fn(cfg) -> score (higher is better); it is injected so tests use a fake."""
 
     def __init__(self, base_cfg: dict, sampler: Sampler, method: str,
-                 train_fn: Callable[[dict], float], epochs_per_trial: int = 8):
+                 train_fn: Callable[[dict], float], epochs_per_trial: int = 8,
+                 on_trial: Callable[[dict, float], None] | None = None):
         self.base_cfg, self.sampler, self.method = base_cfg, sampler, method
         self.train_fn, self.epochs_per_trial = train_fn, epochs_per_trial
+        self.on_trial = on_trial  # called after each finished trial, e.g. to save partial results
 
     def _trial_cfg(self, i: int, params: dict) -> dict:
         cfg = copy.deepcopy(self.base_cfg)  # the base config stays untouched
@@ -45,6 +47,8 @@ class Tuner:
         start = time.perf_counter()
         for i, params in enumerate(trials):
             scores.append(float(self.train_fn(self._trial_cfg(i, params))))
+            if self.on_trial:
+                self.on_trial(params, scores[-1])
         seconds = time.perf_counter() - start
         best = max(range(len(scores)), key=scores.__getitem__)
         return TuneResult(self.method, scores[best], trials[best], len(scores), seconds,
