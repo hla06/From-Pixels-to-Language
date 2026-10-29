@@ -26,11 +26,11 @@ tracker:
   group: tune
   run_name: tune_resnet18
 tuning:
-  n_trials: 12
-  epochs_per_trial: 8
+  n_trials: 6
+  epochs_per_trial: 5
   grid:
     lr: [1.0e-4, 3.0e-4, 1.0e-3]
-    weight_decay: [1.0e-4, 1.0e-2]
+    weight_decay: [1.0e-4]
     dropout: [0.2, 0.5]
   random:
     lr: {type: log_uniform, low: 1.0e-4, high: 1.0e-3}
