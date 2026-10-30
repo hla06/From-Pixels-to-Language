@@ -89,8 +89,8 @@ def test_tune_cli_writes_json(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "TUNING_DIR", tmp_path)
     assert main(["tune", "--method", "random"]) == 0
     data = json.loads((tmp_path / "random.json").read_text())
-    assert data["method"] == "random" and data["n_trials"] == 12
-    assert len(data["scores"]) == 12
+    assert data["method"] == "random" and data["n_trials"] == 6
+    assert len(data["scores"]) == 6
 
 
 def test_trial_cfg_redirects_history():

@@ -58,6 +58,7 @@ class Trainer:
         self.scaler = torch.amp.GradScaler("cuda", enabled=self.use_amp)
         self.best_val_acc = -1.0
         self.checkpoint_path = self._checkpoint_path()
+        self.last_path = self.checkpoint_path[:-3] + ".last.pt"  # full state, for resume
 
     def _checkpoint_path(self) -> str:
         run_name = self.cfg.get("tracker", {}).get("run_name")
@@ -68,8 +69,10 @@ class Trainer:
     def fit(self) -> dict:
         t = self.cfg["train"]
         self.tracker.log_params({"train": t, "encoder": self.cfg.get("encoder", {})})
-        history, bad_epochs = [], 0
-        for epoch in range(1, t["epochs"] + 1):
+        history, bad_epochs, start = [], 0, 1
+        if self.cfg.get("resume") and Path(self.last_path).exists():
+            history, bad_epochs, start = self._load_last()
+        for epoch in range(start, t["epochs"] + 1):
             train_loss, train_acc = self.train_epoch()
             val_loss, val_acc = self.validate()
             lr = self.optimizer.param_groups[-1]["lr"]
@@ -84,12 +87,31 @@ class Trainer:
                 bad_epochs += 1
                 if bad_epochs >= t["patience"]:
                     break
+            self._save_last(history, bad_epochs)  # a runtime reset now loses at most one epoch
         run_name = self.cfg.get("tracker", {}).get("run_name") or "best-model"
         # unique per run so W&B artifacts of different runs do not collapse into one lineage
         self.tracker.log_artifact(self.checkpoint_path, f"{run_name}-best")
         self.tracker.finish()
+        Path(self.last_path).unlink(missing_ok=True)  # finished: the best checkpoint is enough
         return {"best_val_acc": self.best_val_acc, "history": history,
                 "checkpoint": self.checkpoint_path}
+
+    def _save_last(self, history: list, bad_epochs: int) -> None:
+        torch.save({"model_state": self.model.state_dict(),
+                    "optimizer_state": self.optimizer.state_dict(),
+                    "scheduler_state": self.scheduler.state_dict(),
+                    "scaler_state": self.scaler.state_dict(), "history": history,
+                    "bad_epochs": bad_epochs, "best_val_acc": self.best_val_acc}, self.last_path)
+
+    def _load_last(self) -> tuple[list, int, int]:
+        """Restore the state saved after the last finished epoch; returns (history, bad, next epoch)."""
+        ckpt = torch.load(self.last_path, map_location=self.device)
+        self.model.load_state_dict(ckpt["model_state"])
+        self.optimizer.load_state_dict(ckpt["optimizer_state"])
+        self.scheduler.load_state_dict(ckpt["scheduler_state"])
+        self.scaler.load_state_dict(ckpt["scaler_state"])
+        self.best_val_acc = ckpt["best_val_acc"]
+        return ckpt["history"], ckpt["bad_epochs"], len(ckpt["history"]) + 1
 
     def train_epoch(self) -> tuple[float, float]:
         self.model.train()

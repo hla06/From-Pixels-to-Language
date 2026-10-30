@@ -18,6 +18,8 @@
 
 ## Failed experiments
 
+- **Colab runs lost (2026-10-30).** Tried: training and tuning on free Colab T4 with results written to the runtime's local disk and copied to Drive only in the last notebook cell. Result: the daily GPU limit cut sessions, the runtime reset, `outputs/checkpoints` was gone and the evaluate step failed with missing checkpoints. Cause: nothing persisted before the end. Fix: `outputs/{checkpoints,history,eval,tuning,figures,eda}` are symlinks to Drive, the trainer saves `<run>.last.pt` after every epoch, and `--resume` skips finished runs and continues an interrupted one (data order after a resume is not bit-identical).
+
 ## Task 12 status
 
 ### Done locally (CPU, no GPU)

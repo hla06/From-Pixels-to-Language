@@ -30,8 +30,32 @@ DEFAULT_CHECKPOINT = "outputs/checkpoints/resnet18_finetune.pt"  # the final mod
 BENCHMARK_CONFIG = Path("configs/benchmark.yaml")
 
 
+def _history_path(cfg: dict) -> Path:
+    run_name = cfg.get("tracker", {}).get("run_name") or "run"
+    return Path(cfg.get("history_dir", str(HISTORY_DIR))) / f"{run_name}.json"
+
+
+def _finished_result(cfg: dict) -> dict | None:
+    """With cfg['resume'], a run whose history file and best checkpoint exist counts as done."""
+    if not cfg.get("resume"):
+        return None
+    run_name = cfg.get("tracker", {}).get("run_name")
+    ckpt = Path(cfg.get("checkpoint_dir", "outputs/checkpoints")) / (
+        f"{run_name}.pt" if run_name else "best.pt")
+    hist = _history_path(cfg)
+    if not (ckpt.exists() and hist.exists()):
+        return None
+    history = json.loads(hist.read_text(encoding="utf-8"))
+    return {"best_val_acc": max(h["val_acc"] for h in history), "history": history,
+            "checkpoint": str(ckpt)}
+
+
 def run_train(cfg: dict, loaders: dict | None = None) -> dict:
     """Build every piece from the config and run Trainer.fit(); `loaders` can be injected (tests)."""
+    done = _finished_result(cfg)
+    if done is not None:
+        print(f"resume: {done['checkpoint']} already trained, skipping")
+        return done
     set_seed(cfg["seed"])
     tracker = build_tracker(cfg)
     class_names = None
@@ -54,10 +78,9 @@ def run_train(cfg: dict, loaders: dict | None = None) -> dict:
         result = trainer.fit()
     finally:
         tracker.finish()  # no-op if fit() already finished; closes the W&B run after a crash
-    run_name = cfg.get("tracker", {}).get("run_name") or "run"
-    history_dir = Path(cfg.get("history_dir", str(HISTORY_DIR)))
-    history_dir.mkdir(parents=True, exist_ok=True)
-    (history_dir / f"{run_name}.json").write_text(json.dumps(result["history"], indent=2),
+    hist = _history_path(cfg)
+    hist.parent.mkdir(parents=True, exist_ok=True)
+    hist.write_text(json.dumps(result["history"], indent=2),
                                                   encoding="utf-8")
     return result
 
@@ -91,6 +114,7 @@ def cmd_train(args) -> int:
     if _milestone2_guard(args):
         return 2
     cfg = load_config(args.config)
+    cfg["resume"] = args.resume
     if args.smoke:
         apply_smoke(cfg)
     result = run_train(cfg)
@@ -102,6 +126,7 @@ def cmd_tune(args) -> int:
     from src.training.samplers import GridSampler, RandomSampler
     from src.training.tuner import Tuner
     cfg = load_config(args.config)
+    cfg["resume"] = args.resume
     tuning = cfg.pop("tuning")  # search spaces are not part of a training run's config
     if args.method == "grid":
         sampler = GridSampler(tuning["grid"])
@@ -318,6 +343,9 @@ def build_parser() -> argparse.ArgumentParser:
             p.add_argument("--method", choices=["grid", "random"], default="grid")
         if name == "train":
             p.add_argument("--smoke", action="store_true")
+        if name in ("train", "tune"):
+            p.add_argument("--resume", action="store_true",
+                           help="skip finished runs and continue an interrupted one")
         if name == "predict":
             p.add_argument("--image", required=True)
             p.add_argument("--topk", type=int, default=5)

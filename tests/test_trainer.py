@@ -128,3 +128,23 @@ def test_artifact_named_after_run(tmp_path):
     t, tracker = make_trainer(cfg)
     t.fit()
     assert [c[2] for c in tracker.calls if c[0] == "log_artifact"] == ["my_run-best"]
+
+
+def test_resume_continues_after_interrupted_epoch(tmp_path):
+    class Crash(Trainer):
+        def train_epoch(self):
+            if len(self.tracker.calls) > 2:  # params + 2 epochs logged, then die in epoch 3
+                raise RuntimeError("runtime reset")
+            return super().train_epoch()
+
+    cfg = make_cfg(tmp_path, epochs=4)
+    t, _ = make_trainer(cfg, trainer_cls=Crash)
+    with pytest.raises(RuntimeError):
+        t.fit()
+    assert (tmp_path / "best.last.pt").exists()
+    cfg["resume"] = True
+    t2, tracker2 = make_trainer(cfg)
+    out = t2.fit()
+    assert [h["epoch"] for h in out["history"]] == [1, 2, 3, 4]
+    assert len([c for c in tracker2.calls if c[0] == "log_metrics"]) == 2  # only epochs 3, 4 ran
+    assert not (tmp_path / "best.last.pt").exists()
