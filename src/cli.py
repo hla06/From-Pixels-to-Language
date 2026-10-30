@@ -263,6 +263,14 @@ def _load_jsons(directory: Path) -> dict:
             if not p.stem.endswith(".partial")}  # partial tuning dumps are not full results
 
 
+def cmd_fetch_checkpoints(args) -> int:
+    from src.training.fetch import FINAL_RUNS, fetch_checkpoints
+    failed = fetch_checkpoints(args.names or FINAL_RUNS, args.dest, project=args.project)
+    if failed:
+        print(f"missing: {', '.join(failed)} (retrain these with --resume)", file=sys.stderr)
+    return 1 if failed else 0
+
+
 def cmd_figures(args) -> int:
     """Build every comparison figure from whatever result files exist; skip the rest."""
     import yaml
@@ -324,6 +332,7 @@ HANDLERS = {
     "evaluate": cmd_evaluate,
     "gradcam": cmd_gradcam,
     "figures": cmd_figures,
+    "fetch-checkpoints": cmd_fetch_checkpoints,
 }
 
 
@@ -352,6 +361,10 @@ def build_parser() -> argparse.ArgumentParser:
             p.add_argument("--gradcam-out")
         if name == "evaluate":
             p.add_argument("--name")
+        if name == "fetch-checkpoints":
+            p.add_argument("--names", nargs="*", help="run names (default: all nine final runs)")
+            p.add_argument("--dest", default="outputs/checkpoints")
+            p.add_argument("--project", default="pixels-to-language")
         if name == "gradcam":
             p.add_argument("--out", default=str(FIGURES_DIR))
     return parser
