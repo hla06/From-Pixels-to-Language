@@ -20,6 +20,26 @@
 
 - **Colab runs lost (2026-10-30).** Tried: training and tuning on free Colab T4 with results written to the runtime's local disk and copied to Drive only in the last notebook cell. Result: the daily GPU limit cut sessions, the runtime reset, `outputs/checkpoints` was gone and the evaluate step failed with missing checkpoints. Cause: nothing persisted before the end. Fix: `outputs/{checkpoints,history,eval,tuning,figures,eda}` are symlinks to Drive, the trainer saves `<run>.last.pt` after every epoch, and `--resume` skips finished runs and continues an interrupted one (data order after a resume is not bit-identical).
 
+- **Results written to Colab local disk again (2026-10-31).** Tried: the final runs with `outputs/*` as plain folders because the notebook's symlink cell had not taken effect (`ls -l outputs` showed no symlinks; `final/` on Drive was empty). Result: after the refresh the checkpoints and history JSONs were gone. Cause: symlink cell skipped/failed after a runtime reset, so nothing went to Drive. Fix: `fetch-checkpoints` restored all 9 checkpoints from W&B artifacts; the symlinks were rebuilt and verified with `ls -l outputs` before continuing; every model was re-evaluated on the test set. Per-epoch history of the 7 other main runs was not restored, so their curves come from W&B.
+- **`resnet18_tuned` was not tuned (2026-10-31).** Tried: retraining the best tuned setting. Result: its test metrics were identical to `resnet18_finetune` to four decimals. Cause: `configs/resnet18_tuned.yaml` still held the defaults (lr 1e-4, dropout 0.5), so the same seed gave the same model; the grid winner had never been copied in. Fix: set lr_backbone 3e-4, lr_head 3e-3, weight decay 1e-4, dropout 0.2 and retrained.
+- **Tuning did not help at the full budget (2026-10-31).** The grid winner (chosen after 5 epochs per trial, 6 trials) scored 74.34% test accuracy at 30 epochs versus 75.08% for the untuned fine-tune (difference of about 43 test images, within run-to-run noise). Suspected reason: a higher learning rate wins a 5-epoch race but gains nothing over 30 epochs with cosine decay; the budget (6 trials, 5 epochs) was also too small to separate Grid (0.707) from Random (0.696) in best score or time (1578 s vs 1605 s).
+
+## Final test results (CUB test, 5794 images)
+
+| Run | Accuracy | F1 macro |
+|---|---|---|
+| scratch_cnn | 0.1731 | 0.1547 |
+| resnet18_random | 0.3773 | 0.3665 |
+| resnet18_frozen | 0.6075 | 0.6074 |
+| resnet18_finetune | 0.7508 | 0.7505 |
+| resnet18_tuned (grid best params) | 0.7434 | 0.7409 |
+| resnet50_frozen | 0.6344 | 0.6311 |
+| resnet50_finetune (best) | 0.8070 | 0.8060 |
+| efficientnet_b0_frozen | 0.7694 | 0.7698 |
+| efficientnet_b0_finetune | 0.7832 | 0.7838 |
+
+Benchmark: ResNet-50 baseline in the NTS-Net paper is 84.5% (448x448 input, longer training); our 80.7% uses 224x224. Grad-CAM was run for `resnet50_finetune` and `scratch_cnn`.
+
 ## Task 12 status
 
 ### Done locally (CPU, no GPU)
