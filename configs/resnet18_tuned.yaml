@@ -15,10 +15,10 @@ data:
 train:
   epochs: 30
   patience: 7
-  lr_backbone: 1.0e-4
-  lr_head: 1.0e-3
+  lr_backbone: 3.0e-4
+  lr_head: 3.0e-3
   weight_decay: 1.0e-4
-  dropout: 0.5
+  dropout: 0.2
   batch_size: 64
   label_smoothing: 0.1
 tracker:
