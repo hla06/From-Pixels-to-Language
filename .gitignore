@@ -15,3 +15,6 @@ outputs/tuning/
 outputs/figures/
 outputs/data/
 outputs/eda/
+
+# report build inputs (downloaded Drive figures and W&B screenshots)
+report_assets/
