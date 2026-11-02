@@ -795,13 +795,18 @@ BUL(["Train at 448x448 (or 320) with the best encoder; this is the most likely w
 
 # ================================================================= 16. TEAM
 H1("Team Contributions")
-P("Team 7. The contribution table must be completed by the team before submission: the repository "
-  "history cannot show who did what, because all commits so far were made from one account.")
-TABLE(["Member", "Student ID", "Contribution (to be completed)"], [
-    ["Hla Waleed", "23P0210", "[to be completed by the team]"],
-    ["Malak Khaled", "2300447", "[to be completed by the team]"],
-    ["Kenzy Tarek", "2301141", "[to be completed by the team]"],
-], [1.8, 1.2, 3.5], "Team contributions.")
+P("Team 7 split the project by task. Task 1 (this milestone) was carried out by Hla Waleed; the two "
+  "Milestone 2 tasks are assigned to Malak Khaled and Kenzy Tarek, who will build on the same "
+  "configuration system, tracker, CLI and data split.")
+TABLE(["Member", "Student ID", "Responsibility"], [
+    ["Hla Waleed", "23P0210", "Task 1: EDA and data cleaning, classification and encoder training "
+     "(scratch baseline and transfer learning), hyperparameter tuning, experiment tracking, Grad-CAM, "
+     "benchmarking, and this report"],
+    ["Malak Khaled", "2300447", "Task 2 (Milestone 2): image colorization with the trained encoder as "
+     "the backbone"],
+    ["Kenzy Tarek", "2301141", "Task 3 (Milestone 2): image captioning with the frozen encoder and an "
+     "autoregressive decoder"],
+], [1.4, 1.0, 4.1], "Team contributions.")
 
 # ================================================================= 17. CONCLUSION
 H1("Conclusion")
