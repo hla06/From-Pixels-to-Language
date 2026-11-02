@@ -556,8 +556,9 @@ BUL(["**Grid Search found the better setting** (70.7% vs 69.6%), and the cost wa
 H2("8.2 Does tuning carry over to the full run?")
 P("We retrained the grid winner with the full 30-epoch budget (`resnet18_tuned`). It scored **74.34%** on "
   "the test set against **75.08%** for the untuned fine-tune with the default settings, a difference of "
-  "about 43 test images, which is within the noise between two training runs. In other words, the "
-  "5-epoch search did not improve the final model. A likely reason is that a higher learning rate "
+  "about 43 test images, which is within the noise between two training runs. On the validation "
+  "split the two runs are identical to the second decimal (both reach a best validation accuracy of "
+  "73.39%), so the 5-epoch search did not improve the final model on either split. A likely reason is that a higher learning rate "
   "(3e-4) wins a short race because it learns faster, but gives no advantage once a cosine "
   "schedule has 30 epochs to converge. We report this as a negative result in Section 15.")
 
@@ -587,11 +588,20 @@ for fn, cap in WB:
 FIG(ASSETS / "figures" / "training_curves_grid.png",
     "Training (dashed) and validation (solid) accuracy and loss of each of the nine final runs, "
     "rebuilt from the Weights & Biases histories with `fetch-history`.", 6.5)
-P("Reading the curves: the from-scratch models (ScratchCNN, ResNet-18 from random weights) improve "
-  "slowly and their validation accuracy stays far below the training accuracy; the frozen encoders "
-  "plateau early because only the head learns; the fine-tuned models reach the highest validation "
-  "accuracy within a few epochs and then overfit (training accuracy keeps rising while validation "
-  "accuracy flattens), which is why early stopping on validation accuracy keeps the best epoch.")
+P("**Reading the curves.** (1) The two from-scratch models are **not overfitting; they are under-trained.** "
+  "ScratchCNN reaches only about 18% validation accuracy, and its training and validation curves are "
+  "almost the same and still rising at epoch 30, so the 30-epoch limit stopped it before it converged. "
+  "ResNet-18 from random weights is still improving at epoch 30 as well (about 45% training and 37% "
+  "validation accuracy). Their test scores are therefore lower bounds. (2) The frozen encoders "
+  "level off after roughly 15 to 20 epochs because only the linear head learns; ResNet-18 frozen stays "
+  "at about 57% on both training and validation, while ResNet-50 frozen (78% train, 61% validation) and "
+  "EfficientNet-B0 frozen (90% train, 75% validation) show a gap. (3) The fine-tuned models fit the "
+  "training set almost perfectly (ResNet-50 reaches nearly 100% training accuracy by about epoch 10) "
+  "while validation accuracy flattens (ResNet-50 at about 79%, EfficientNet-B0 at about 77%, "
+  "ResNet-18 at about 73%). Validation loss stays flat instead of rising, so this is memorisation of "
+  "the small training set without the validation score getting worse; label smoothing and the "
+  "cosine schedule probably help here. Early stopping ended ResNet-50 fine-tuned at epoch 24, "
+  "EfficientNet-B0 frozen at 23 and ResNet-18 frozen at 29; the other six ran all 30 epochs.")
 FIG(ASSETS / "figures" / "training_curves.png",
     "All nine runs on one plot: validation (solid) and training (dashed) loss, and accuracy.", 6.2)
 
@@ -761,7 +771,8 @@ BUL(["**Results lost on Colab (twice).** First, runs and tuning outputs written 
      "**The from-scratch models are weak.** ScratchCNN (17.3%) and ResNet-18 from random weights (37.7%) "
      "are far below the pretrained models. With about 30 images per class and a limited budget this is "
      "expected; we did not try to rescue them with longer training or heavier augmentation, so they are "
-     "a lower bound for from-scratch training rather than a best effort."])
+     "a lower bound for from-scratch training rather than a best effort. Their curves (Section 9) are still "
+     "rising at epoch 30, so more epochs would help."])
 H2("15.2 Limitations")
 BUL(["Inputs are 224x224; the published results use 448x448 (Section 13).",
      "The final models were trained on 80% of the train split; we did not retrain on train plus "
