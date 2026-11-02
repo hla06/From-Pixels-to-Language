@@ -3,14 +3,40 @@
 One CNN encoder backs three tasks: image classification, colorization and image captioning, all on
 CUB-200-2011 with captions (`Multimodal-Fatima/CUB_train`, `Multimodal-Fatima/CUB_test`).
 
-**Status: Milestone 1 (EDA, classification, encoder).** Colorization and captioning are
+**Status: Milestone 1 (EDA, classification, encoder) is complete.** Colorization and captioning are
 **Milestone 2**; the CLI accepts `--task colorization|caption` but exits with a "Milestone 2" message.
+
+### Milestone 1 results (CUB test split, 5,794 images)
+
+| Model | Top-1 acc. (%) | Macro F1 (%) |
+|---|---|---|
+| ScratchCNN (from scratch) | 17.31 | 15.47 |
+| ResNet-18 (random init) | 37.73 | 36.65 |
+| ResNet-18 frozen / fine-tuned | 60.75 / 75.08 | 60.74 / 75.05 |
+| ResNet-18 tuned (grid-search best) | 74.34 | 74.09 |
+| ResNet-50 frozen / **fine-tuned (final model)** | 63.44 / **80.70** | 63.11 / **80.60** |
+| EfficientNet-B0 frozen / fine-tuned | 76.94 / 78.32 | 76.98 / 78.38 |
+
+The final model is `resnet50_finetune`, chosen on validation accuracy (see the report, Section 14).
+The full report is `report/Team7_Milestone1_Report.pdf`; failed experiments are in `outputs/NOTES.md`.
+
+### Trained models
+
+All nine checkpoints are on Google Drive:
+<https://drive.google.com/drive/folders/10oDTZjIkUaUYYdQJh_dtkMqeObfuFMyq> (the `checkpoints` folders).
+They are also stored as W&B artifacts (`<run>-best`), so they can be restored without Drive:
+
+```
+python -m src.cli fetch-checkpoints            # needs wandb login; writes outputs/checkpoints/<run>.pt
+python -m src.cli fetch-history                # per-epoch curves from W&B into outputs/history/<run>.json
+```
 
 ## Repository layout
 
 ```
 src/
-  cli.py            command line entry point (eda, train, tune, evaluate, gradcam, predict, figures)
+  cli.py            command line entry point (eda, train, tune, evaluate, gradcam, predict, figures,
+                    fetch-checkpoints, fetch-history)
   config.py         YAML config loading
   data/             CUB loading, caption cleaning, splits, transforms, image statistics
   models/           Encoder interface, registry, ScratchCNN, torchvision encoders, Classifier
@@ -53,7 +79,10 @@ The CUB dataset is downloaded from Hugging Face into the default HF cache on fir
 
 All commands run from the repository root as `python -m src.cli <command> ...`.
 
-EDA (class distribution, image sizes, caption statistics, plots; writes the findings block in `outputs/NOTES.md`):
+EDA: class distribution, image sizes and quality (brightness, contrast, sharpness), sample images with
+captions, caption statistics, augmentation examples. It also cleans the captions (lowercase, punctuation
+removed, rare typos corrected) into `outputs/data/captions_clean.json` and writes the cleaning steps and
+findings block in `outputs/NOTES.md`:
 
 ```
 python -m src.cli eda --config configs/scratch_cnn.yaml
@@ -71,6 +100,9 @@ python -m src.cli train --task classification --config configs/resnet50_finetune
 python -m src.cli train --task classification --config configs/efficientnet_b0_frozen.yaml
 python -m src.cli train --task classification --config configs/efficientnet_b0_finetune.yaml
 ```
+
+Add `--resume` to `train` or `tune` to skip finished runs and continue an interrupted one (the trainer saves
+`<run>.last.pt` after every epoch), for example after a Colab runtime reset.
 
 Smoke test (CPU, 32 images, 1 epoch, no tracker; writes `outputs/smoke/smoke.pt`). It only proves the
 pipeline runs; its metrics are meaningless:
@@ -102,21 +134,21 @@ Evaluate a checkpoint on the test set (accuracy, precision, recall, F1, confusio
 confused pairs); `--name` names the result file `outputs/eval/<name>.json`:
 
 ```
-python -m src.cli evaluate --checkpoint outputs/checkpoints/resnet18_finetune.pt --name resnet18_finetune
+python -m src.cli evaluate --checkpoint outputs/checkpoints/resnet50_finetune.pt --name resnet50_finetune
 ```
 
 Grad-CAM on correct and wrong test predictions (grids written to `--out`, default `outputs/figures`):
 
 ```
-python -m src.cli gradcam --checkpoint outputs/checkpoints/resnet18_finetune.pt --out outputs/figures/gradcam_resnet18_finetune
+python -m src.cli gradcam --checkpoint outputs/checkpoints/resnet50_finetune.pt --out outputs/figures/gradcam_resnet50_finetune
 ```
 
 Predict one image (top-k classes; `--gradcam-out` optionally saves a Grad-CAM overlay). `--checkpoint`
-defaults to `outputs/checkpoints/resnet18_finetune.pt`, the final model; pass `--checkpoint` to use another
-one (for example `resnet18_tuned.pt`). A missing image or checkpoint prints an error and exits with code 2:
+defaults to `outputs/checkpoints/resnet50_finetune.pt`, the final model; pass `--checkpoint` to use another
+one (for example `resnet18_tuned.pt`; restore them first with `fetch-checkpoints`). A missing image or checkpoint prints an error and exits with code 2:
 
 ```
-python -m src.cli predict --task classification --image path/to/bird.jpg --checkpoint outputs/checkpoints/resnet18_finetune.pt --topk 5 --gradcam-out outputs/figures/bird_cam.png
+python -m src.cli predict --task classification --image path/to/bird.jpg --checkpoint outputs/checkpoints/resnet50_finetune.pt --topk 5 --gradcam-out outputs/figures/bird_cam.png
 ```
 
 Comparison figures and the benchmark table, built from whatever result files exist in
