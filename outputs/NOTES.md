@@ -59,44 +59,24 @@
 
 Benchmark: ResNet-50 baseline in the NTS-Net paper is 84.5% (448x448 input, longer training); our 80.7% uses 224x224. Grad-CAM was run for `resnet50_finetune` and `scratch_cnn`.
 
-## Task 12 status
+## Milestone 1 status
 
-### Done locally (CPU, no GPU)
-- Real CUB downloaded to the default Hugging Face cache (outside the repo): train 5994 images, test 5794. Real columns: `image, description, label, file_name, id`.
-- Smoke test `train --task classification --config configs/scratch_cnn.yaml --smoke` ran end to end on CPU (32 images, 1 epoch, no tracker) and wrote `outputs/smoke/smoke.pt`. Its loss/accuracy (best_val_acc=0.0) are meaningless; it only proves the pipeline runs.
-- `predict` with the smoke checkpoint on one test image (plus `--gradcam-out`) printed top-k and saved an overlay.
-- `eda` finished on CPU; the stats block above was written by it. Real findings (no fixes applied, to be discussed): every image has exactly 10 captions; 639 train and 667 test captions are duplicates; 4 of 5994 train images are not RGB (converted to 3 channels in the transforms); 2 train image pairs share a perceptual hash; 1378 probable typos (rare word with a frequent look-alike) are left untouched in the captions.
-- Generated artefacts (`outputs/smoke`, `history`, `eval`, `tuning`, `figures`, `data`, `eda`, checkpoints) are git-ignored; only this file is tracked.
-- `notebooks/colab_runner.ipynb` written (shell cells only).
+Complete (2026-11-02). Checked against spec section 6.1 and section 9.
 
-### Remaining GPU steps (for the team, on Colab/Kaggle T4; use `notebooks/colab_runner.ipynb`)
-1. Clone, install requirements, `wandb login`, run `eda`; time one ResNet-18 epoch and set final `epochs`/`patience` in the configs so all runs fit. Record seconds/epoch here. (Configs still hold the placeholder epoch/lr defaults.)
-2. Run the 8 training runs (tracker group `m1-runs`).
-3. Run `tune --method grid` and `tune --method random`, then retrain the best setting once at the full budget.
-4. `evaluate` every final checkpoint on the test set, Grad-CAM for the best fine-tuned model and ScratchCNN, `figures`, copy checkpoints/outputs to Drive.
-5. Add anything that failed or underperformed (what was tried, what happened, suspected reason) under "Failed experiments"; commit `docs: experiment notes and final configs`.
-
-## M1 coverage and gaps
-
-(Hand-written; not part of the auto-generated EDA block.) Checked against spec section 9.
-
-### Exists in code
-- 1.1: class distribution, image sizes/quality, caption statistics, anomalies and plots (`eda`); `description` split/cleaned; train/val/test split (val carved from train); augmentation transforms.
-- 1.2: ScratchCNN baseline; transfer learning with pretrained ResNet-18/50 and EfficientNet-B0 (frozen and fine-tuned) plus ResNet-18 random init; Grid and Random tuning with a comparison plot; W&B tracking; Grad-CAM on correct and wrong predictions.
-- Cross-cutting: modular `src/` + CLI (`eda, train, tune, evaluate, gradcam, predict, figures`), seeds, README + pinned requirements, comparison figures, metrics (accuracy, precision, recall, F1, confusion matrix), benchmark table code and `configs/benchmark.yaml`, this failure log.
-
-### Waiting on GPU runs (Colab/Kaggle T4, see `notebooks/colab_runner.ipynb`)
-- Set final `epochs`/`patience` after timing one epoch (configs hold placeholders).
-- The 8 training runs, the Grid and Random tuning runs, and the retrain of the best setting.
-- `evaluate` on every final checkpoint, Grad-CAM figures, `figures`.
-- The benchmark table needs our accuracies; the training curves, model comparison and tuning comparison figures need the run results.
-- "Failed experiments" above is empty until runs happen.
+### What exists
+- Task 1.1: class distribution, image sizes and quality, caption statistics, anomalies and plots (`eda`); `description` split and cleaned (punctuation removed, rare typos corrected, see "Cleaning steps"); stratified train/validation split from train; augmentation strategy with examples.
+- Task 1.2: ScratchCNN baseline plus ResNet-18 from random weights; transfer learning with ResNet-18/50 and EfficientNet-B0 (frozen and fine-tuned); Grid and Random Search compared; W&B tracking of every run; Grad-CAM on correct and wrong predictions.
+- Cross-cutting: modular `src/` and CLI (`eda, train, tune, evaluate, gradcam, predict, figures, fetch-checkpoints, fetch-history`), seeds, README and pinned requirements, metrics (accuracy, top-5, precision, recall, F1, confusion matrix), benchmark table against NTS-Net and TransFG, this failure log, and the report (`report/Team7_Milestone1_Report.pdf`).
+- Training: 30 epochs maximum, patience 7, batch 64, seed 42, about 53 s per ResNet-18 epoch on a Colab T4. Final configs are in `configs/`.
 
 ### Known gaps
-- `configs/benchmark.yaml` published numbers were re-checked against the NTS-Net and TransFG papers (2026-11-02): 84.5 / 87.5 and 90.3 / 91.7.
-- EDA typo count (1378) includes tokenization artifacts (punctuation attached to words, e.g. `massive,`); no cleaning beyond the listed steps was applied.
-- The train transform now resizes explicitly (to round(image_size * 256 / 224), i.e. 256) before RandomResizedCrop, matching the spec's "resize ~256, random resized crop 224".
+- The final model (`resnet50_finetune`) is chosen on validation accuracy (79.73%), not on test accuracy.
+- The from-scratch models are still improving at epoch 30, so their scores are lower bounds.
+- Each result is one run with seed 42; differences below about 1 point are within noise.
+- The typo correction is a dictionary-free heuristic with roughly 75-80% precision on the first 20 corrections; a few valid words are changed.
 - Validation loss includes label smoothing 0.1, so it never approaches 0; compare it across runs, not against 0.
 - On CUDA the GradScaler may skip the first optimizer step (inf/NaN check), which produces a harmless scheduler warning.
-- Run history, eval JSON, tuning and figures are git-ignored; copy the figures into the report.
-- Unconfirmed whether "own CNN" in the spec allows a standard architecture; ScratchCNN is a small custom CNN trained from scratch, and ResNet-18 random init is an additional from-scratch baseline.
+- Run history, eval JSON, tuning and figures are git-ignored; the report uses copies of them.
+- Unconfirmed whether "own CNN" in the spec allows a standard architecture; ScratchCNN is a small custom CNN trained from scratch, and ResNet-18 random init is an additional from-scratch baseline. Ask the TAs.
+- `configs/benchmark.yaml` published numbers were re-checked against the NTS-Net and TransFG papers: 84.5 / 87.5 and 90.3 / 91.7.
+- Colorization and captioning (Milestone 2) are not implemented; the CLI exits with a Milestone 2 message for them.
