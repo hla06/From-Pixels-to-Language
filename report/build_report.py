@@ -14,6 +14,7 @@ import docx
 from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
+from docx.opc.constants import RELATIONSHIP_TYPE as RT
 from docx.oxml.ns import qn
 from docx.shared import Inches, Pt
 
@@ -56,25 +57,70 @@ start = next(i for i, e in enumerate(kids) if e.tag == qn("w:p") and _style(e) =
 for e in kids[start:]:
     if e.tag != qn("w:sectPr"):
         body.remove(e)
+# the template ends its table of contents with an explicit page break; the body flows on without it
+for e in kids[:start]:
+    if e.tag == qn("w:p") and any(b.get(qn("w:type")) == "page" for b in e.iter(qn("w:br"))):
+        body.remove(e)
 
 
 # ---------------------------------------------------------------- helpers
+URL = re.compile(r"(https?://[^\s)\]]*[^\s).,;\]])")
+
+
+def _link(p, url, size=None):
+    """Append a clickable external hyperlink (blue, underlined) to paragraph p."""
+    rid = p.part.relate_to(url, RT.HYPERLINK, is_external=True)
+    h = OxmlElement("w:hyperlink")
+    h.set(qn("r:id"), rid)
+    r = OxmlElement("w:r")
+    rPr = OxmlElement("w:rPr")
+    for tag, attrs in (("w:color", {"w:val": "0563C1"}), ("w:u", {"w:val": "single"})):
+        e = OxmlElement(tag)
+        for k, v in attrs.items():
+            e.set(qn(k), v)
+        rPr.append(e)
+    if size:
+        sz = OxmlElement("w:sz")
+        sz.set(qn("w:val"), str(int(size * 2)))
+        rPr.append(sz)
+    r.append(rPr)
+    tx = OxmlElement("w:t")
+    tx.text = url
+    tx.set(qn("xml:space"), "preserve")
+    r.append(tx)
+    h.append(r)
+    p._p.append(h)
+
+
+def _plain(p, text, size=None, bold=False):
+    """Plain text with every URL turned into a hyperlink."""
+    for part in URL.split(text):
+        if not part:
+            continue
+        if URL.fullmatch(part):
+            _link(p, part, size)
+        else:
+            r = p.add_run(part)
+            r.bold = bold or None
+            if size:
+                r.font.size = Pt(size)
+
+
 def _runs(p, text, size=None):
-    """Add text to p; **bold** and `code` spans are honoured."""
+    """Add text to p; **bold** and `code` spans are honoured and URLs become hyperlinks."""
     for part in re.split(r"(\*\*.+?\*\*|`.+?`)", text):
         if not part:
             continue
         if part.startswith("**"):
-            r = p.add_run(part[2:-2])
-            r.bold = True
+            _plain(p, part[2:-2], size, bold=True)
         elif part.startswith("`"):
             r = p.add_run(part[1:-1])
             r.font.name = "Consolas"
             r._element.rPr.rFonts.set(qn("w:eastAsia"), "Consolas")
+            if size:
+                r.font.size = Pt(size)
         else:
-            r = p.add_run(part)
-        if size:
-            r.font.size = Pt(size)
+            _plain(p, part, size)
 
 
 def H1(text):
@@ -125,8 +171,12 @@ def CAPTION(text, kind):
     return p
 
 
+FIG_SCALE = 0.72  # figures are drawn a bit smaller so that fewer of them are pushed to the next page
+
+
 def FIG(path, caption, width=6.0):
     path = Path(path)
+    width *= FIG_SCALE
     p = d.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p.paragraph_format.keep_with_next = True
