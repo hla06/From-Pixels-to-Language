@@ -36,8 +36,10 @@ def test_run_eda_writes_outputs(tmp_path, monkeypatch):
     run_eda(cfg)
     out = tmp_path / "out"
     for f in ["eda/class_distribution.png", "eda/image_sizes.png",
-              "eda/caption_lengths.png", "eda/augmentations.png"]:
+              "eda/caption_lengths.png", "eda/augmentations.png", "eda/samples.png",
+              "eda/image_quality.png", "eda/top_words.png", "data/typo_map.json"]:
         assert (out / f).exists()
     clean = json.loads((out / "data/captions_clean.json").read_text(encoding="utf-8"))
     assert len(clean) == 10 and clean["f0.jpg"][0] == "a bird 0"
-    assert notes.read_text(encoding="utf-8").count("eda:start") == 1
+    text = notes.read_text(encoding="utf-8")
+    assert text.count("eda:start") == 1 and "Typo map" in text and "Image quality" in text
