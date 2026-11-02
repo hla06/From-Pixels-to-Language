@@ -26,7 +26,7 @@ TUNING_DIR = Path("outputs/tuning")
 HISTORY_DIR = Path("outputs/history")
 EVAL_DIR = Path("outputs/eval")
 FIGURES_DIR = Path("outputs/figures")
-DEFAULT_CHECKPOINT = "outputs/checkpoints/resnet18_finetune.pt"  # the final model
+DEFAULT_CHECKPOINT = "outputs/checkpoints/resnet50_finetune.pt"  # the final model (report, Section 14)
 BENCHMARK_CONFIG = Path("configs/benchmark.yaml")
 
 
@@ -271,6 +271,14 @@ def cmd_fetch_checkpoints(args) -> int:
     return 1 if failed else 0
 
 
+def cmd_fetch_history(args) -> int:
+    from src.training.fetch import FINAL_RUNS, fetch_histories
+    failed = fetch_histories(args.names or FINAL_RUNS, args.dest, project=args.project)
+    if failed:
+        print(f"missing: {', '.join(failed)}", file=sys.stderr)
+    return 1 if failed else 0
+
+
 def cmd_figures(args) -> int:
     """Build every comparison figure from whatever result files exist; skip the rest."""
     import yaml
@@ -292,6 +300,9 @@ def cmd_figures(args) -> int:
         skip("model_comparison")
     if histories:
         cmp.plot_training_curves(histories, out / "training_curves.png")
+        cmp.plot_curves_grid(histories, out / "training_curves_grid.png")
+        if evals:
+            cmp.write_selection_table(histories, evals, out / "selection")
     else:
         skip("training_curves")
     if tuning:
@@ -333,6 +344,7 @@ HANDLERS = {
     "gradcam": cmd_gradcam,
     "figures": cmd_figures,
     "fetch-checkpoints": cmd_fetch_checkpoints,
+    "fetch-history": cmd_fetch_history,
 }
 
 
@@ -361,9 +373,10 @@ def build_parser() -> argparse.ArgumentParser:
             p.add_argument("--gradcam-out")
         if name == "evaluate":
             p.add_argument("--name")
-        if name == "fetch-checkpoints":
+        if name in ("fetch-checkpoints", "fetch-history"):
             p.add_argument("--names", nargs="*", help="run names (default: all nine final runs)")
-            p.add_argument("--dest", default="outputs/checkpoints")
+            p.add_argument("--dest", default="outputs/checkpoints" if name == "fetch-checkpoints"
+                           else str(HISTORY_DIR))
             p.add_argument("--project", default="pixels-to-language")
         if name == "gradcam":
             p.add_argument("--out", default=str(FIGURES_DIR))

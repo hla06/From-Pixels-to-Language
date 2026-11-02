@@ -58,7 +58,7 @@ def test_predict_missing_checkpoint_or_image_returns_2(tiny_ckpt, tmp_path, caps
 def test_predict_checkpoint_defaults_to_final_model():
     from src.cli import DEFAULT_CHECKPOINT, build_parser
     args = build_parser().parse_args(["predict", "--image", "p"])
-    assert args.checkpoint == DEFAULT_CHECKPOINT == "outputs/checkpoints/resnet18_finetune.pt"
+    assert args.checkpoint == DEFAULT_CHECKPOINT == "outputs/checkpoints/resnet50_finetune.pt"
 
 
 @pytest.fixture

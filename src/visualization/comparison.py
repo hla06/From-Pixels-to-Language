@@ -3,6 +3,7 @@ from pathlib import Path
 
 import matplotlib
 import numpy as np
+from matplotlib.lines import Line2D
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
@@ -50,17 +51,65 @@ def plot_model_comparison(results: dict[str, dict], out: Path) -> None:
 
 
 def plot_training_curves(histories: dict[str, list[dict]], out: Path) -> None:
-    """Loss (left) and validation accuracy (right) per epoch; solid = val loss, dashed = train loss."""
+    """Loss (left) and accuracy (right) per epoch; solid = validation, dashed = training."""
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4))
     for name, h in histories.items():
         ep = [r["epoch"] for r in h]
         line, = ax1.plot(ep, [r["val_loss"] for r in h], label=name)
         ax1.plot(ep, [r["train_loss"] for r in h], "--", color=line.get_color())
-        ax2.plot(ep, [r["val_acc"] for r in h], label=name)
+        ax2.plot(ep, [r["val_acc"] for r in h], color=line.get_color(), label=name)
+        ax2.plot(ep, [r["train_acc"] for r in h], "--", color=line.get_color())
     ax1.set(xlabel="epoch", ylabel="loss", title="Loss (dashed = train)")
-    ax2.set(xlabel="epoch", ylabel="val accuracy", title="Validation accuracy")
+    ax2.set(xlabel="epoch", ylabel="accuracy", title="Accuracy (dashed = train)")
     ax2.legend(fontsize=7)
     _save(fig, out)
+
+
+def plot_curves_grid(histories: dict[str, list[dict]], out: Path, cols: int = 3) -> None:
+    """One panel per run: training vs validation accuracy (left axis) and loss (right axis)."""
+    rows = -(-len(histories) // cols)
+    fig, axes = plt.subplots(rows, cols, figsize=(4.2 * cols, 3.2 * rows), squeeze=False)
+    for ax, (name, h) in zip(axes.ravel(), histories.items()):
+        ep = [r["epoch"] for r in h]
+        ax.plot(ep, [r["train_acc"] for r in h], "--", color="tab:blue", label="train acc")
+        ax.plot(ep, [r["val_acc"] for r in h], color="tab:blue", label="val acc")
+        ax.set(title=name, xlabel="epoch", ylim=(0, 1))
+        ax2 = ax.twinx()
+        ax2.plot(ep, [r["train_loss"] for r in h], "--", color="tab:red", label="train loss")
+        ax2.plot(ep, [r["val_loss"] for r in h], color="tab:red", label="val loss")
+        ax2.set_ylabel("loss", color="tab:red")
+        ax.set_ylabel("accuracy", color="tab:blue")
+    for ax in axes.ravel()[len(histories):]:
+        ax.axis("off")
+    proxies = [Line2D([], [], color=c, ls=ls) for c in ("tab:blue", "tab:red") for ls in ("--", "-")]
+    fig.legend(proxies, ["train acc", "val acc", "train loss", "val loss"],
+               loc="lower center", ncol=4, fontsize=8)
+    fig.tight_layout(rect=(0, 0.04, 1, 1))
+    out = Path(out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out, dpi=150)
+    plt.close(fig)
+
+
+def write_selection_table(histories: dict[str, list[dict]], evals: dict[str, dict],
+                          out_stem: Path) -> None:
+    """Best validation accuracy next to test accuracy per run, sorted by validation accuracy.
+
+    The final model is chosen on the validation column; the test column is only reported.
+    Writes <out_stem>.csv and <out_stem>.md.
+    """
+    rows = [{"run": n, "best_val_acc": max(r["val_acc"] for r in h),
+             "epochs": len(h), "test_acc": evals[n]["metrics"]["accuracy"]}
+            for n, h in histories.items() if n in evals]
+    rows.sort(key=lambda r: r["best_val_acc"], reverse=True)
+    out_stem = Path(out_stem)
+    out_stem.parent.mkdir(parents=True, exist_ok=True)
+    lines = ["run,best_val_acc,epochs,test_acc"] + [
+        f"{r['run']},{r['best_val_acc']:.4f},{r['epochs']},{r['test_acc']:.4f}" for r in rows]
+    out_stem.with_suffix(".csv").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    md = ["| run | best val acc | epochs | test acc |", "|---|---|---|---|"] + [
+        f"| {r['run']} | {r['best_val_acc']:.4f} | {r['epochs']} | {r['test_acc']:.4f} |" for r in rows]
+    out_stem.with_suffix(".md").write_text("\n".join(md) + "\n", encoding="utf-8")
 
 
 def plot_confused_pairs(cm, class_names, out: Path, k: int = 10) -> None:
