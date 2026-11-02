@@ -241,7 +241,8 @@ BUL(["**Task 1.1** Data understanding and EDA: class distribution, image sizes a
 # ================================================================= 3. DATASET
 H1("Dataset Description")
 P("The dataset is the Hugging Face release of CUB-200-2011 with captions. The provided train and test "
-  "splits were kept; we never touched the test set for any decision.")
+  "splits were kept. The test set is not used for training, early stopping, hyperparameter tuning or "
+  "choosing the final model (all of those use the validation split); it only reports final scores.")
 TABLE(["Property", "Value"], [
     ["Source", "`Multimodal-Fatima/CUB_train` (train) and `Multimodal-Fatima/CUB_test` (test)"],
     ["Classes", "200 bird species"],
@@ -254,72 +255,131 @@ TABLE(["Property", "Value"], [
 P("**Validation split.** The provided data has no validation set, so we carved one out of the train "
   "split: 20% of the images, stratified by class with a fixed seed (42), giving "
   "**4,795 training, 1,199 validation and 5,794 test images**. Validation is used for early stopping, "
-  "checkpoint selection and hyperparameter tuning; the test set is used once per final model. "
+  "checkpoint selection, hyperparameter tuning and the choice of the final model; each trained "
+  "model is evaluated on the test set once, to report its scores. "
   "The training loader drops its last incomplete batch, so 4,736 images (74 batches of 64) are "
   "seen per epoch.")
 
 # ================================================================= 4. EDA
 H1("Data Understanding and EDA")
 P("All statistics below were computed by `python -m src.cli eda` on the real train and test splits.")
-H2("4.1 Class distribution")
+H2("4.1 Sample images")
+FIG(EDA / "samples.png", "Eight of the 200 species with one cleaned caption each (the same kind of sample as "
+    "Figure 1 of the project specification).", 6.2)
+P("The photographs show birds in the wild, in very different poses, sizes, lighting and backgrounds "
+  "(water, branches, foliage, ground). Often the bird covers a small part of the frame (the White Pelican "
+  "and the Black-footed Albatross), while others are close-ups (the Black-capped Vireo). The captions "
+  "describe colours and body parts (\"black beak and red eyering\"), which is the information a "
+  "captioning model must learn in Milestone 2. They are not guaranteed to be correct or complete: the "
+  "caption for the Prairie Warbler calls it a \"sparrow like bird\".")
+H2("4.2 Class distribution")
 FIG(EDA / "class_distribution.png", "Images per class in the train split.", 6.2)
 P("The training set is almost perfectly balanced: every class has 30 images, with a handful at 29. "
   "There is therefore no need for resampling or class weights, and macro-averaged and overall "
   "accuracy are nearly the same number. The difficulty comes from having few images per class, not "
   "from imbalance.")
-H2("4.2 Image sizes and quality")
+H2("4.3 Image sizes and quality")
 FIG(EDA / "image_sizes.png", "Left: image width and height. Right: aspect ratio (width/height).", 6.2)
 P("Images are at most 500 px on the longer side; a large share are exactly 500 px wide or high, and "
   "smaller images are scattered below. Aspect ratios range from 0.5 (tall) to about 2.5, with most "
   "images between 1.2 and 1.6 (landscape). Because the images are not square, they cannot simply "
   "be stretched to 224x224 without distorting the bird, so the pipeline resizes first and then "
   "crops (Section 5).")
+FIG(EDA / "image_quality.png", "Brightness, contrast and sharpness of the 5,994 train images (measured on a "
+    "128x128 thumbnail so that scores are comparable across image sizes).", 6.4)
+P("Image quality was measured per image: **brightness** (mean grey level), **contrast** (standard "
+  "deviation of the grey level) and **sharpness** (variance of the Laplacian, a standard blur measure: "
+  "low values mean blurry). All three are roughly bell-shaped, so there is no separate group of bad "
+  "images. The median brightness is 123 of 255 (range 21 to 244), the median contrast is 42, and the "
+  "sharpness spans more than two orders of magnitude (median 1,227; the blurriest 1% are below 223). "
+  "Extremes exist but are few: 15 images are very dark (mean grey level below 40), 41 are very bright "
+  "(above 215), and 46 have a side shorter than 200 px, so they are upscaled to 224. We kept them: they "
+  "are real photographs of the species, and the random-resized-crop and colour-jitter augmentation "
+  "already exposes the model to such variation.")
+P("The mean RGB of the dataset is (0.486, 0.499, 0.432) with standard deviation (0.226, 0.221, 0.260), "
+  "close to the ImageNet statistics (0.485, 0.456, 0.406) and (0.229, 0.224, 0.225). The slightly "
+  "higher green and blue come from the many water and foliage backgrounds. Because they are close, "
+  "ImageNet normalisation is appropriate for the pretrained models and costs nothing for the scratch "
+  "model (Section 5.2).")
 BUL(["**Non-RGB files:** 4 of 5,994 train images are not 3-channel RGB (grayscale or alpha). They are "
      "converted to RGB when loaded.",
      "**Near-duplicates:** 2 pairs of train images have an identical perceptual hash. Two pairs out "
      "of 5,994 images is negligible, so they were kept and noted.",
      "**Corrupted files:** none; every image decoded when the statistics were computed."])
-H2("4.3 Caption statistics")
-FIG(EDA / "caption_lengths.png", "Caption length in words (all train captions).", 4.6)
-TABLE(["Statistic", "Train", "Test"], [
-    ["Images", "5,994", "5,794"],
-    ["Images without exactly 10 captions", "0", "0"],
-    ["Mean caption length (words)", "15.24", "15.22"],
-    ["Vocabulary size (lower-cased words)", "6,690", "6,536"],
-    ["Words that occur exactly once", "3,487 (52%)", "3,398 (52%)"],
-    ["Duplicate captions within one image", "639", "667"],
-], [3.3, 1.6, 1.6], "Caption statistics after splitting and cleaning.", align_right_from=1)
+H2("4.4 Caption statistics")
+FIG(EDA / "caption_lengths.png", "Caption length in words (all train captions, after cleaning).", 4.6)
+TABLE(["Statistic", "Train, raw (lower-cased)", "Train, cleaned", "Test, cleaned"], [
+    ["Images", "5,994", "5,994", "5,794"],
+    ["Images without exactly 10 captions", "0", "0", "0"],
+    ["Mean caption length (words)", "15.24", "15.28", "15.26"],
+    ["Captions of at most 3 words", "28", "2", "1"],
+    ["Captions of 40 words or more", "124", "128", "117"],
+    ["Vocabulary size (distinct words)", "6,690", "3,738", "3,841"],
+    ["Words that occur exactly once", "3,487 (52%)", "1,592 (43%)", "1,720 (45%)"],
+    ["Duplicate captions within one image", "639", "646", "673"],
+], [2.5, 1.5, 1.2, 1.3], "Caption statistics before and after cleaning (Section 5.1).", align_right_from=1)
 P("Every image has exactly ten captions. Lengths peak at about 12 words with a long tail up to about "
-  "65 words, so a captioning decoder needs a maximum length around 30 to 40 tokens. More than half of "
-  "the vocabulary appears only once, which is typical of free-text descriptions with typos; a "
-  "captioning vocabulary will need a minimum-frequency threshold or sub-word tokens in Milestone 2.")
-P("**Typos and noise.** A simple detector (a word seen once that closely matches a frequent word) "
-  "flagged 1,378 probable typos in the train captions, for example `agrayish` (grayish), `winspan` "
-  "(wingspan), `magestic` (majestic), `ligt` (light) and `eyrings` (eyerings). Many of the flagged "
-  "items are not real typos but punctuation glued to a word (`massive,`, `strip;`, `beak.\"`), so "
-  "the true typo count is lower. This is a tokenisation issue to solve in Milestone 2 by stripping "
-  "punctuation before building the vocabulary.")
-H2("4.4 Summary of anomalies")
+  "65 words, so a captioning decoder needs a maximum length around 30 to 40 tokens; 128 train captions "
+  "(0.2%) have 40 words or more. **Encoding damage:** 27 train and 29 test captions have every space "
+  "replaced by two Unicode replacement characters (U+FFFD), for example `this??bird??has??a??black...`, "
+  "so the whole caption looks like a single word. That is why 28 raw train captions seem to have at "
+  "most three words; 26 of them are these damaged captions, and the punctuation step of the cleaning "
+  "turns the replacement characters back into spaces. After cleaning only 2 very short captions remain "
+  "(the shortest has one word, `this`). They are kept: they are legitimate, if poor, captions.")
+FIG(EDA / "top_words.png", "The 25 most frequent words in the cleaned train captions.", 4.8)
+P("The most frequent words are function words and the vocabulary of plumage (colours, \"bill\", "
+  "\"wings\", \"crown\", \"breast\"). **Noise in the raw text:** the vocabulary has 6,690 distinct "
+  "tokens, but more than half of them (3,487) occur once. Most of this is not rare bird vocabulary but "
+  "punctuation glued to words (`massive,`, `strip;`, `beak.\"`) and misspellings (`agrayish`, `winspan`, "
+  "`magestic`, `eyrings`). Cleaning (Section 5.1) removes the punctuation variants, which brings the "
+  "vocabulary down to 4,061 words, and the typo correction brings it to 3,738.")
+H2("4.5 Summary of anomalies")
 TABLE(["Finding", "Size", "Action"], [
     ["Class imbalance", "none (30 per class)", "no resampling"],
     ["Non-RGB images", "4 train images", "convert to RGB in the transforms"],
     ["Near-duplicate images (same perceptual hash)", "2 train pairs", "kept, documented"],
-    ["Duplicate captions in one image", "639 train / 667 test", "kept (harmless for training); note for M2"],
-    ["Probable typos", "1,378 flagged (inflated by punctuation)", "not edited by hand; handle in tokenisation (M2)"],
+    ["Very dark / very bright / small images", "15 / 41 / 46 train images", "kept; covered by augmentation"],
+    ["Duplicate captions in one image", "639 train / 673 test (cleaned)", "kept (harmless for training); note for M2"],
+    ["Punctuation glued to words", "2,629 extra vocabulary entries", "removed in the caption cleaning"],
+    ["Encoding damage (spaces replaced by U+FFFD)", "27 train / 29 test captions", "repaired by the cleaning (non-alphanumeric to space)"],
+    ["Misspelled words", "323 words corrected in 381 captions", "corrected (Section 5.1)"],
+    ["Very short / very long captions", "2 / 128 train captions", "kept, counted"],
     ["Variable image size and aspect ratio", "all images", "resize 256, crop 224"],
 ], [2.6, 1.9, 2.0], "Anomalies found during EDA and what was done about them.")
 
 # ================================================================= 5. PREPROCESSING
 H1("Data Cleaning, Preprocessing and Augmentation")
 H2("5.1 Caption cleaning")
-P("Captions are not used by the classifier in Milestone 1, but they were cleaned now so that "
-  "Milestone 2 starts from clean data. Steps (all in `src/data/captions.py`):")
-BUL(["Split `description` on the newline character into the ten individual captions.",
-     "Drop blank lines (for example from a trailing newline).",
-     "Lower-case, strip, and collapse repeated whitespace.",
-     "**Not done on purpose:** punctuation removal and typo correction. Automatic typo fixing is "
-     "unreliable (it would also change rare but valid words such as bird-part names), so this "
-     "decision is deferred to tokenisation in Milestone 2. The cleaned captions are saved as JSON."])
+P("Captions are not used by the classifier in Milestone 1, but the cleaning is part of the data task "
+  "and was done now, with the results saved as `outputs/data/captions_clean.json`, so that Milestone 2 "
+  "starts from clean text. Steps (all in `src/data/captions.py`):")
+BUL(["**Split** `description` on the newline character into the ten individual captions and drop blank "
+     "lines (for example from a trailing newline).",
+     "**Unicode normalisation (NFKC) and lower-casing**, so that `Bird` and `bird`, or typographic and "
+     "plain quotes, are one token.",
+     "**Remove punctuation.** Apostrophes are deleted (`bird's` becomes `birds`, `isn't` becomes `isnt`); "
+     "every other non-alphanumeric character (comma, full stop, semicolon, quotation mark, hyphen) is "
+     "replaced by a space and whitespace is collapsed. Hyphens split compound words (`long-tailed` becomes "
+     "`long tailed`), which matches how the CUB species names are written and avoids a separate vocabulary "
+     "entry for every hyphenated variant. This removed about 2,600 vocabulary entries that were only a "
+     "word plus punctuation.",
+     "**Correct typos conservatively.** A word that occurs at most twice in the train captions, has at "
+     "least six letters, and is exactly one edit (deletion, insertion, substitution or swap of two "
+     "adjacent letters) away from a word that occurs at least 20 times is replaced by that frequent word "
+     "(the most frequent one if there are several). The correction table is built from the **train** "
+     "captions only, so no test words influence it, and applied to train and test. It corrects 323 "
+     "words in 381 of the 59,940 train captions, for example `agrayish` to `grayish`, `winspan` to "
+     "`wingspan`, `loarge` to `large`, `irange` to `orange`, `feathets` to `feathers` and `metalic` to "
+     "`metallic`.",
+     "**Known limits of the typo step.** It is a heuristic without a dictionary, so it can also change a "
+     "valid but rare word into a frequent neighbour, for example `curling` to `curving` or `clunky` to "
+     "`chunky`; in the first 20 corrections we count four or five such cases, so its precision is "
+     "roughly 75-80%, and the changes touch only 0.6% of the captions. We accepted that trade-off because "
+     "the misspellings it removes would otherwise each become a separate, almost never seen vocabulary "
+     "entry. Words shorter than six letters are never changed because valid short words (`wind`, `bread`, "
+     "`alone`) are often one letter from a frequent one.",
+     "**Kept on purpose:** duplicate captions within an image (harmless), and very short or long captions "
+     "(counted and reported in Table 2, not removed, so that every image keeps exactly ten captions)."])
 H2("5.2 Image preprocessing")
 BUL(["Convert every image to 3-channel RGB.",
      "Evaluation: resize the shorter side to 256, centre-crop 224x224. This keeps the full bird in "
@@ -524,8 +584,16 @@ WB = [("1_val_acc_curves.png", "Weights & Biases: validation accuracy per epoch.
        "checkpoint is stored as the model artifact resnet18_tuned-best:v1.")]
 for fn, cap in WB:
     FIG(WANDB / fn, cap, 6.2)
+FIG(ASSETS / "figures" / "training_curves_grid.png",
+    "Training (dashed) and validation (solid) accuracy and loss of each of the nine final runs, "
+    "rebuilt from the Weights & Biases histories with `fetch-history`.", 6.5)
+P("Reading the curves: the from-scratch models (ScratchCNN, ResNet-18 from random weights) improve "
+  "slowly and their validation accuracy stays far below the training accuracy; the frozen encoders "
+  "plateau early because only the head learns; the fine-tuned models reach the highest validation "
+  "accuracy within a few epochs and then overfit (training accuracy keeps rising while validation "
+  "accuracy flattens), which is why early stopping on validation accuracy keeps the best epoch.")
 FIG(ASSETS / "figures" / "training_curves.png",
-    "Training and validation curves of the retrained (tuned) ResNet-18, 30 epochs.", 6.0)
+    "All nine runs on one plot: validation (solid) and training (dashed) loss, and accuracy.", 6.2)
 
 # ================================================================= 10. METRICS
 H1("Evaluation Metrics")
@@ -626,9 +694,27 @@ P("The ResNet-50 baseline is the fairest reference: the same architecture, the s
 
 # ================================================================= 14. SELECTION
 H1("Final Model Selection")
-P("**Selected for classification: ResNet-50, fine-tuned (resnet50_finetune).** It has the highest "
-  "top-1 accuracy (80.70%), top-5 accuracy (94.82%) and macro F1 (80.60%) of the nine models, with "
-  "balanced precision and recall.")
+SEL = ASSETS / "figures" / "selection.csv"
+if SEL.is_file():
+    rows = [r.split(",") for r in SEL.read_text(encoding="utf-8").splitlines()[1:]]
+    top_val = rows[0][0]   # sorted by best validation accuracy
+    P(f"**Selected for classification: ResNet-50, fine-tuned (resnet50_finetune).** The choice is made on "
+      f"the **validation** split, not the test set. Table below ranks every run by its best validation "
+      f"accuracy; the test accuracy is shown next to it for reporting only.")
+    TABLE(["Run", "Best val. acc. (%)", "Epochs run", "Test acc. (%)"],
+          [[r[0], f"{100 * float(r[1]):.2f}", r[2], f"{100 * float(r[3]):.2f}"] for r in rows],
+          [2.4, 1.5, 1.2, 1.4], "Model selection: validation accuracy decides, test accuracy is only reported.",
+          size=8.5, align_right_from=1, bold_row=0)
+    best_test = max(rows, key=lambda r: float(r[3]))[0]
+    if top_val == "resnet50_finetune" and best_test == top_val:
+        P("ResNet-50 fine-tuned is first on validation and also first on test, so the choice does not "
+          "depend on which split is used. It also has the highest top-5 accuracy (94.82%) and macro F1 "
+          "(80.60%), with balanced precision and recall.")
+    else:
+        raise SystemExit(f"selection changed: val winner {top_val}, test winner {best_test}; rewrite Section 14")
+else:
+    missing.append(str(SEL))
+    P("[MISSING: selection table - run `fetch-history` and `figures`, then rebuild]")
 TABLE(["Candidate", "Test acc. (%)", "Parameters", "Comment"], [
     ["ResNet-50 fine-tuned", "80.70", "23.5 M", "best accuracy; selected"],
     ["EfficientNet-B0 fine-tuned", "78.32", "4.0 M", "2.4 points lower with 6x fewer parameters; best light alternative"],
@@ -653,7 +739,17 @@ BUL(["**Results lost on Colab (twice).** First, runs and tuning outputs written 
      "a resumable `.last.pt` every epoch, `--resume` skips finished runs, a `fetch-checkpoints` command "
      "restores the best checkpoints from W&B artifacts, and we now verify `ls -l outputs` "
      "before any training. All nine checkpoints were restored from W&B and re-evaluated. The "
-     "per-epoch history files of seven runs were not restored; their curves exist only in W&B.",
+     "per-epoch history files of seven runs were not restored with the checkpoints; they were "
+     "rebuilt afterwards from the W&B histories with `fetch-history`.",
+     "**Caption cleaning took two attempts.** The first version only lower-cased the captions, which left "
+     "6,690 vocabulary entries (half of them seen once), mostly punctuation glued to words, and left 27 "
+     "train captions whose spaces were damaged by an encoding error looking like one-word captions. After "
+     "stripping punctuation the vocabulary fell to 4,061. The first typo correction (words of five letters "
+     "or more) also changed valid words (`alone` to `along`, `bread` to `broad`), so we raised the minimum to "
+     "six letters (323 corrections instead of 530); some valid words are still changed (Section 5.1).",
+     "**The final model was first chosen on test accuracy.** Our first comparison ranked the runs by test "
+     "score, which lets the test set influence the decision. We now choose on validation accuracy and "
+     "only report test accuracy (Section 14).",
      "**The \"tuned\" model was not tuned.** The first `resnet18_tuned` run gave test metrics identical to "
      "`resnet18_finetune` to four decimals. The config still held the default hyperparameters because "
      "the grid-search winner had never been copied into it, so the same seed produced the same model. "
@@ -673,10 +769,11 @@ BUL(["Inputs are 224x224; the published results use 448x448 (Section 13).",
      "Each result is a single run with seed 42, so differences below about 1 point (such as tuned vs "
      "untuned) are within noise; no repeated seeds or confidence intervals were computed.",
      "GPU training is not bit-for-bit reproducible across hardware or PyTorch builds.",
-     "The caption typo detector over-counts (it flags punctuation attached to words), and no caption "
-     "correction was applied.",
-     "Published benchmark numbers were transcribed from the cited papers and should be re-checked "
-     "against them before final submission."])
+     "The caption typo correction is a dictionary-free heuristic with roughly 75-80% precision on the "
+     "sample we checked; a few valid words were changed (Section 5.1). It was not evaluated on a labelled "
+     "set of typos.",
+     "The published benchmark numbers were checked against the cited papers (NTS-Net 84.5 and 87.5, "
+     "TransFG 90.3 and 91.7), but their training setups differ from ours (Section 13)."])
 H2("15.3 What we would try next")
 BUL(["Train at 448x448 (or 320) with the best encoder; this is the most likely way to close the gap to the "
      "published baselines.",
