@@ -222,6 +222,15 @@ P("The code is pure Python/PyTorch, run from a command line (`python -m src.cli 
   "`README.md` and `requirements.txt`. Models were trained on a free Colab T4 GPU.")
 
 # ================================================================= 2. PROBLEM
+H2("1.1 Project resources")
+TABLE(["Resource", "Link"], [
+    ["Source code (GitHub, full commit history)", "https://github.com/hla06/From-Pixels-to-Language"],
+    ["Trained models, results and figures (Google Drive)", "https://drive.google.com/drive/folders/10oDTZjIkUaUYYdQJh_dtkMqeObfuFMyq"],
+    ["Experiment tracking (Weights & Biases)", "https://forge.coreweave.com/wandb/hla-ain-shams/pixels-to-language"],
+    ["Colab runner notebook", "https://colab.research.google.com/github/hla06/From-Pixels-to-Language/blob/main/notebooks/colab_runner.ipynb"],
+    ["Setup and run commands", "`README.md` in the repository"],
+], [2.6, 3.9], "Where to find the code, models and experiment logs (access is limited to the team and the teaching staff).", size=8.5)
+
 H1("Problem Definition")
 P("**Input:** one RGB photograph of a bird (variable size, at most 500 px on a side). "
   "**Output:** one of 200 species labels. The encoder that produces the label also produces a "
